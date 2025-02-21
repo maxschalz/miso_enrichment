@@ -5,20 +5,17 @@
 __all__ = ["predict", "run_kernel"]
 
 import json
-import numpy as np
-import os
+from pathlib import Path
 
-from . import kernel
+import numpy as np
+
+from .kernel import kernel_function
 
 
 # TODO
 # - Find a workaround for the ugly calculations that are currently
 #   performed in 'get_input_params' for the 'power_output' parameter
 #   and that are only relevant (?) for the SRS reactor.
-
-
-def main():
-    return
 
 
 def predict(uid_fname=""):
@@ -54,36 +51,29 @@ def predict(uid_fname=""):
     )
 
     # Check if the needed kernels and parameter information exist.
-    data_dir = os.path.join(os.path.split(__file__)[0], "..", "data")
-    kernel_dir = os.path.join(data_dir, "trained_kernels")
-    if not os.path.isdir(kernel_dir):
+    data_dir = Path(__file__).parent.resolve() / ".." / "data"
+    kernel_dir = data_dir / "trained_kernels"
+    if not kernel_dir.is_dir():
         raise OSError("'trained_kernels' directory not found!")
-    for iso in isotopes:
-        fname = f"{iso}.npy"
-        if not os.path.isfile(os.path.join(kernel_dir, fname)):
-            msg = f"Trained kernel '{fname}' not found!"
-            raise FileNotFoundError(msg)
 
-        fname = f"training_params_{iso}.json"
-        if not os.path.isfile(os.path.join(kernel_dir, fname)):
-            msg = f"Training parameters '{fname}' not found!"
-            raise FileNotFoundError(msg)
+    for iso in isotopes:
+        fname = kernel_dir / f"{iso}.npy"
+        if not fname.is_file():
+            raise FileNotFoundError(f"Trained kernel '{fname}' not found!")
+
+        fname = kernel_dir / f"training_params_{iso}.json"
+        if not fname.is_file():
+            raise FileNotFoundError(f"Training parameters '{fname}' not found!")
 
     # Load input parameters, training data and the kernel type.
-    training_data = np.load(
-        os.path.join(data_dir, "x_trainingset.npy"), allow_pickle=True
-    )
-    if not os.path.isfile(os.path.join(data_dir, "y_trainingset_reduced.npy")):
-        y_data = np.load(
-            os.path.join(data_dir, "y_trainingset.npy"), allow_pickle=True
-        ).item()
-        shrink_dictionary(
-            y_data, isotopes, os.path.join(data_dir, "y_trainingset_reduced.npy")
-        )
+    training_data = np.load(data_dir / "x_trainingset.npy", allow_pickle=True)
+    fname_y_data_reduced = data_dir / "y_trainingset_reduced.npy"
+    if not fname_y_data_reduced.is_file():
+        y_data = np.load(data_dir / "y_trainingset.npy", allow_pickle=True).item()
+        shrink_and_store_dictionary(y_data, isotopes, fname_y_data_reduced)
 
-    y_data = np.load(
-        os.path.join(data_dir, "y_trainingset_reduced.npy"), allow_pickle=True
-    ).item()
+    y_data = np.load(fname_y_data_reduced, allow_pickle=True).item()
+
     par = ("enrichment", "temperature", "power_output", "burnup")
     reactor_input_params = get_input_params(par, uid_fname)
     reactor_input_params = np.expand_dims(reactor_input_params, axis=0)
@@ -91,9 +81,9 @@ def predict(uid_fname=""):
     # Calculate the spent fuel composition for all isotopes.
     spent_fuel_composition = {"spent_fuel_composition": {}}
     for iso in isotopes:
-        kernel_fname = os.path.join(kernel_dir, f"{iso}.npy")
-        params_fname = os.path.join(kernel_dir, f"training_params_{iso}.json")
-        with open(params_fname, "r") as f:
+        kernel_fname = kernel_dir / f"{iso}.npy"
+        params_fname = kernel_dir / f"training_params_{iso}.json"
+        with open(params_fname, "r", encoding="utf-8") as f:
             data = json.load(f)
             kernel_type = data["kernel_type"]
             size = data["size"]
@@ -138,7 +128,7 @@ def check_input_params(params, training_data):
         raise ValueError(msg)
 
 
-def shrink_dictionary(data, isotopes, fname):
+def shrink_and_store_dictionary(data, isotopes, fname):
     """Remove unnecessary data from dictionary to reduce runtime
 
     Parameters
@@ -156,8 +146,6 @@ def shrink_dictionary(data, isotopes, fname):
         d[iso] = data[iso]
 
     np.save(fname, d, allow_pickle=True)
-
-    return
 
 
 def get_input_params(pnames, uid_fname=""):
@@ -180,7 +168,7 @@ def get_input_params(pnames, uid_fname=""):
         specified in `pnames`.
     """
     fname = f"gpr_reactor_input_params{uid_fname}.json"
-    with open(fname, "r") as f:
+    with open(fname, "r", encoding="utf-8") as f:
         data = json.load(f)
         input_params = []
 
@@ -224,7 +212,7 @@ def store_results(composition, uid_fname=""):
         being the corresponding masses.
     """
     fname = f"gpr_reactor_spent_fuel_composition{uid_fname}.json"
-    with open(fname, "w") as f:
+    with open(fname, "w", encoding="utf-8") as f:
         json.dump(composition, f, indent=2)
 
 
@@ -259,7 +247,7 @@ def run_kernel(
 
     kernel_params = trained_kernel["Params"]
     alpha = trained_kernel["alpha_"]
-    k_s = kernel.Kernel(
+    k_s = kernel_function(
         reactor_input_params, x_train, kernel_type, kernel_params, gradient=False
     )
     mu_s = np.dot(k_s.T, alpha)[0]
@@ -269,43 +257,3 @@ def run_kernel(
     mu_s = mu_s * np.std(y_train) + np.mean(y_train)
 
     return mu_s
-
-
-"""
-Part of the spent fuel compositions obtained from SERPENT simulations
-of one Savannah River Site reactors. Taken from Max Schalz' master
-thesis, see https://github.com/maxschalz/studious_potato/blob/main/data/SERPENT_outputs_NatU_percentages.npy
-Simulations kindly provided by Antonio Figueroa.
-
-BU:        0.5MWd       2MWd
-  U230: 2.701e-21  2.701e-21
-  U231: 1.422e-22  1.422e-22
-  U232: 2.850e-14  2.850e-14
-  U233: 3.099e-11  3.099e-11
-  U234: 8.513e-05  8.513e-05
-  U235: 1.030e-02  1.030e-02
-  U236: 9.760e-05  9.760e-05
-  U237: 8.535e-07  8.535e-07
-  U238: 9.885e-01  9.885e-01
-  U239: 5.391e-07  5.391e-07
-  U240: 1.744e-10  1.744e-10
-  U241: 1.100e-15  1.100e-15
-  U242: 3.389e-20  3.389e-20
- Pu238: 9.167e-09  9.167e-09
- Pu239: 4.052e-04  4.052e-04
- Pu240: 9.193e-06  9.193e-06
- Pu241: 5.679e-07  5.679e-07
- Pu242: 5.122e-09  5.122e-09
- Pu243: 1.835e-12  1.835e-12
- Pu244: 4.362e-15  4.362e-15
- Np239: 7.775e-05  7.775e-05
- Np240: 1.160e-09  1.160e-09
- Np241: 3.059e-15  3.059e-15
- Np242: 4.438e-21  4.438e-21
- U235m: 8.643e-10  8.643e-10
-Np240m: 2.402e-10  2.402e-10
-
-"""
-
-if __name__ == "__main__":
-    main()

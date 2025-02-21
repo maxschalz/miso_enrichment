@@ -14,7 +14,10 @@ or https://github.com/FigueroaAC/GPs-for-SpentFuel
 """
 
 __author__ = "Nuclear Verification and Disarmament Group, RWTH Aachen University"
-__copyright__ = "Copyright 2020-2021, Nuclear Verification and Disarmament Group, RWTH Aachen University"
+__copyright__ = (
+    "Copyright 2020-2025, Nuclear Verification and Disarmament Group, "
+    "RWTH Aachen University"
+)
 __credits__ = ["Antonio Figueroa", "Max Schalz"]
 __license__ = "BSD-3-Clause"
 __version__ = "2.0"
