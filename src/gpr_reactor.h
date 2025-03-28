@@ -6,10 +6,6 @@
 
 #include "cyclus.h"
 
-// Future changes relating to the implementation of Antonio's GPRs are marked
-// with the following comment:
-// TODO ANTONIO GPR
-//
 // TODO list:
 // - check line 49 in .cc file. Ensure that `unique_out_commods.empty()`
 //   evaluates to `true`, else, the set gets not filled!
@@ -17,7 +13,6 @@
 //   it is not used in the reactor class.
 // - think about the weird (?) decommissioning behaviour of the cycamore
 //   archetype and whether or not I should use it as well
-// - check if GPRs use mass or molar fractions?
 
 namespace misoenrichment {
 
@@ -88,6 +83,38 @@ class GprReactor : public cyclus::Facility, public cyclus::toolkit::Position  {
   std::vector<double> fuel_prefs;
 
   std::set<std::string> unique_out_commods;
+
+  #pragma cyclus var { \
+    "doc": "The nuclides that are used as input to the GPR calculations, in " \
+           "the following form (U235m as example): 922350001" \
+  }
+  std::set<int> nuclides_to_gpr;
+
+  #pragma cyclus var { \
+    "doc": "Indicate whether the GPRs use atom or mass fractions for the composition." \
+  }
+  std::string mass_or_atom_to_gpr;
+
+  #pragma cyclus var { \
+    "doc": "The nuclides used individually to generate the " \
+           "spent fuel composition in Cyclus (same form as used in " \
+           "nuclides_to_gpr). IMPORTANT NOTE: All other nuclides, present in " \
+           "the file read by Cyclus, are NOT ignored. They are added up and " \
+           "stored as hydrogen component [10010000] in the spent fuel " \
+           "composition." \
+  }
+  std::set<int> nuclides_from_gpr;
+
+  // relevant_spent_fuel_comps(std::set<int>(
+  //     {922320000, 922330000, 922340000, 922350000, 922350001, 922360000,
+  //      922380000, 922390000, 922400000, 932390000, 932400000, 932400001,
+  //      932410000, 942380000, 942390000, 942400000, 942410000, 942420000,
+  //      942430000, 942440000}
+  //
+  // This set contains all nuc ids of isotopes in spent fuel that we are
+  // interested in and that the GPRs calculate.
+  const std::set<int> relevant_spent_fuel_comps;
+
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // Core specifics
   #pragma cyclus var { \
@@ -240,15 +267,6 @@ class GprReactor : public cyclus::Facility, public cyclus::toolkit::Position  {
   # pragma cyclus var {"capacity": "n_assem_spent * assem_size"}
   cyclus::toolkit::ResBuf<cyclus::Material> spent_inv;
 
-  // This set contains all nuc ids that may be part of fresh fuel. So far,
-  // they are limited to U235 and U238, however this list will expand in the
-  // future. Notably, other U isotopes will be included (probably U232 up to
-  // U236) and possibly Pu as well.
-  const std::set<int> permitted_fresh_fuel_comps;
-  // This set contains all nuc ids of isotopes in spent fuel that we are
-  // interested in and that the GPRs calculate.
-  const std::set<int> relevant_spent_fuel_comps;
-
   // Filenames of files used to pass arguments and results between the Python
   // file and the C++ Cyclus archetype.
   std::string out_fname;
@@ -282,6 +300,7 @@ class GprReactor : public cyclus::Facility, public cyclus::toolkit::Position  {
   std::map<std::string, cyclus::toolkit::MatVec> PeekSpent_();
   std::map<std::string, cyclus::toolkit::MatVec> PopSpent_();
   std::string OutCommod_(cyclus::Material::Ptr m);
+  void CheckInput_();
   void CompositionToOutFile_(cyclus::Composition::Ptr comp,
                              bool delete_outfile = false);
   void IndexRes_(cyclus::Resource::Ptr m, std::string incommod);

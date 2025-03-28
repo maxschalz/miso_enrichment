@@ -38,6 +38,8 @@ class GprReactorTest : public ::testing::Test {
   std::vector<std::string> out_commods;
   std::vector<std::string> in_recipes;
   std::vector<double> fuel_prefs;
+  std::set<int> nuclides_to_gpr;
+  std::set<int> nuclides_from_gpr;
 
   // The Do* functions are a hack: GprReactorTest is a friend class to
   // GprReactor and it can therefore access private functions. However,

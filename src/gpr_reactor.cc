@@ -16,13 +16,8 @@
 #include "pyne.h"
 #include <nlohmann/json.hpp>
 
-// Future changes relating to the implementation of Antonio's GPRs are marked
-// with the following comment:
-// TODO ANTONIO GPR
-
 namespace misoenrichment {
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 GprReactor::GprReactor(cyclus::Context* ctx)
     : cyclus::Facility(ctx),
       in_commods(std::vector<std::string>()),
@@ -48,13 +43,8 @@ GprReactor::GprReactor(cyclus::Context* ctx)
       side_products(std::vector<std::string>()),
       side_product_quantity(std::vector<double>()),
       unique_out_commods(std::set<std::string>()),
-      permitted_fresh_fuel_comps(std::set<int>({922350000, 922380000})),
-      relevant_spent_fuel_comps(std::set<int>(
-          {922320000, 922330000, 922340000, 922350000, 922350001, 922360000,
-           922380000, 922390000, 922400000, 932390000, 932400000, 932400001,
-           932410000, 942380000, 942390000, 942400000, 942410000, 942420000,
-           942430000, 942440000}
-      )),
+      nuclides_to_gpr(std::set<int>()),
+      nuclides_from_gpr(std::set<int>()),
       uid_fname(GetUid_()) {
   // TODO check, e.g., runtime performance to determine if calling PyStart here
   // and doing the imports here (i.e., once) is actually faster or if this is
@@ -71,7 +61,6 @@ GprReactor::GprReactor(cyclus::Context* ctx)
   in_fname = ss_in.str();
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 uint64_t GprReactor::GetUid_() {
   std::chrono::time_point<std::chrono::system_clock> now =
       std::chrono::system_clock::now();
@@ -79,13 +68,11 @@ uint64_t GprReactor::GetUid_() {
   return ticks;
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 GprReactor::~GprReactor() {
   // TODO see comment in constructor
   //cyclus::PyStop();
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 std::set<cyclus::BidPortfolio<cyclus::Material>::Ptr> GprReactor::GetMatlBids(
     cyclus::CommodMap<cyclus::Material>::type& commod_requests) {
   using cyclus::BidPortfolio;
@@ -139,7 +126,6 @@ std::set<cyclus::BidPortfolio<cyclus::Material>::Ptr> GprReactor::GetMatlBids(
   return ports;
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 std::set<cyclus::RequestPortfolio<cyclus::Material>::Ptr>
 GprReactor::GetMatlRequests() {
   using cyclus::Material;
@@ -196,10 +182,8 @@ GprReactor::GetMatlRequests() {
   return ports;
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 std::string GprReactor::str() { return cyclus::Facility::str(); }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void GprReactor::AcceptMatlTrades(
     const std::vector<std::pair<cyclus::Trade<cyclus::Material>,
                                 cyclus::Material::Ptr> >& responses) {
@@ -229,9 +213,10 @@ void GprReactor::AcceptMatlTrades(
   }
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void GprReactor::EnterNotify() {
   cyclus::Facility::EnterNotify();
+
+  CheckInput_();
 
   if (fuel_prefs.size() == 0) {
     for (int i = 0; i < out_commods.size(); i++) {
@@ -246,7 +231,6 @@ void GprReactor::EnterNotify() {
   RecordPosition_();
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void GprReactor::GetMatlTrades(
     const std::vector<cyclus::Trade<cyclus::Material> >& trades,
     std::vector<std::pair<cyclus::Trade<cyclus::Material>,
@@ -262,7 +246,6 @@ void GprReactor::GetMatlTrades(
   PushSpent_(mats);  // return leftovers back to spent buffer
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void GprReactor::Tick() {
   // Check if the reactor is already retired.
   if (Retired_()) {
@@ -315,7 +298,6 @@ void GprReactor::Tick() {
   // recipes would take place here.
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void GprReactor::Tock() {
   using cyclus::toolkit::RecordTimeSeries;
 
@@ -362,7 +344,6 @@ bool GprReactor::CheckDecommissionCondition() {
   return core.count()==0 && spent_inv.count()==0;
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 bool GprReactor::Discharge_() {
   int n_pop = std::min(n_assem_batch, core.count());
   if (n_assem_spent-spent_inv.count() < n_pop) {
@@ -389,12 +370,10 @@ bool GprReactor::Discharge_() {
   return true;
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 bool GprReactor::Retired_() {
  return exit_time() != -1 && context()->time() > exit_time();
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 std::map<std::string, cyclus::toolkit::MatVec> GprReactor::PeekSpent_() {
   std::map<std::string, cyclus::toolkit::MatVec> mapped;
   cyclus::toolkit::MatVec mats = spent_inv.PopN(spent_inv.count());
@@ -406,7 +385,6 @@ std::map<std::string, cyclus::toolkit::MatVec> GprReactor::PeekSpent_() {
   return mapped;
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 std::map<std::string, cyclus::toolkit::MatVec> GprReactor::PopSpent_() {
   cyclus::toolkit::MatVec mats = spent_inv.PopN(spent_inv.count());
   std::map<std::string, cyclus::toolkit::MatVec> mapped;
@@ -424,7 +402,6 @@ std::map<std::string, cyclus::toolkit::MatVec> GprReactor::PopSpent_() {
   return mapped;
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void GprReactor::IndexRes_(cyclus::Resource::Ptr m, std::string incommod) {
   for (int i = 0; i < in_commods.size(); ++i) {
     if (in_commods[i] == incommod) {
@@ -436,7 +413,6 @@ void GprReactor::IndexRes_(cyclus::Resource::Ptr m, std::string incommod) {
       "misoenrichment::GprReactor - received unsupported incommod material.");
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void GprReactor::Load_() {
   int n_load = std::min(n_assem_core - core.count(), fresh_inv.count());
   if (n_load == 0) {
@@ -448,7 +424,6 @@ void GprReactor::Load_() {
   core.Push(fresh_inv.PopN(n_load));
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void GprReactor::PushSpent_(std::map<std::string,
                                      cyclus::toolkit::MatVec> mats) {
   std::map<std::string, cyclus::toolkit::MatVec>::iterator it;
@@ -460,7 +435,6 @@ void GprReactor::PushSpent_(std::map<std::string,
   }
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void GprReactor::Record_(std::string name, std::string val) {
   context()->NewDatum("ReactorEvents")
            ->AddVal("AgentId", id())
@@ -470,7 +444,6 @@ void GprReactor::Record_(std::string name, std::string val) {
            ->Record();
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void GprReactor::RecordPosition_() {
   context()->NewDatum("AgentPosition")
            ->AddVal("Spec", this->spec())
@@ -481,7 +454,6 @@ void GprReactor::RecordPosition_() {
            ->Record();
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void GprReactor::RecordSideProduct_(bool is_producing) {
   if (is_hybrid) {
     double value;
@@ -502,10 +474,8 @@ void GprReactor::RecordSideProduct_(bool is_producing) {
   }
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void GprReactor::Transmute_() { Transmute_(n_assem_batch); }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void GprReactor::Transmute_(int n_assem) {
   cyclus::toolkit::MatVec old = core.PopN(std::min(n_assem, core.count()));
   core.Push(old);
@@ -562,25 +532,22 @@ void GprReactor::Transmute_(int n_assem) {
     */
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void GprReactor::CompositionToOutFile_(cyclus::Composition::Ptr comp,
                                        bool delete_outfile) {
   nlohmann::json json_object;
 
-  // TODO check if GPRs use mass or atom percent
-  cyclus::CompMap cm = comp->atom();
+  cyclus::CompMap cm = mass_or_atom_to_gpr == "atom" ? comp->atom() : comp->mass();
   cyclus::compmath::Normalize(&cm);
   // Loop over permitted isotopes in composition, add them to the json
   // output file.
-  for (const int& isotope : permitted_fresh_fuel_comps) {
+  for (const int& isotope : nuclides_to_gpr) {
     double fraction;
     try {
       fraction = cm.at(isotope);
     } catch (const std::out_of_range& e) {
       fraction = 0.;
     }
-    std::string nuc_id = std::to_string(isotope);
-    json_object["fresh_fuel_composition"][nuc_id] = fraction;
+    json_object["fresh_fuel_composition"][std::to_string(isotope)] = fraction;
   }
 
   // If the fresh fuel is composed of isotopes other then the permitted ones,
@@ -589,10 +556,10 @@ void GprReactor::CompositionToOutFile_(cyclus::Composition::Ptr comp,
   // material do not influence the reactor operation significantly.
   cyclus::CompMap::iterator compmap_it;
   std::vector<int> ignored_isotopes;
+  std::set<int>::iterator isotope_it;
   for (compmap_it = cm.begin(); compmap_it != cm.end(); ++compmap_it) {
-    std::set<int>::iterator isotope_it = permitted_fresh_fuel_comps.find(
-        compmap_it->first);
-    if (isotope_it == permitted_fresh_fuel_comps.end()) {
+    isotope_it = nuclides_to_gpr.find(compmap_it->first);
+    if (isotope_it == nuclides_to_gpr.end()) {
       ignored_isotopes.push_back(compmap_it->first);
     }
   }
@@ -600,7 +567,7 @@ void GprReactor::CompositionToOutFile_(cyclus::Composition::Ptr comp,
     std::stringstream msg;
     msg << "GprReactor fuel must be composed of (some or all of) the "
            "following isotopes: ";
-    for (const int& iso : permitted_fresh_fuel_comps) {
+    for (const int& iso : nuclides_to_gpr) {
       msg << iso << "\n";
     }
     msg << "Other isotopes are present:\n";
@@ -649,7 +616,6 @@ void GprReactor::CompositionToOutFile_(cyclus::Composition::Ptr comp,
   }
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 cyclus::Composition::Ptr GprReactor::ImportSpentFuelComposition_(double qty) {
   using cyclus::Composition;
 
@@ -683,7 +649,7 @@ cyclus::Composition::Ptr GprReactor::ImportSpentFuelComposition_(double qty) {
   double mass;
   double sum = 0;
 
-  for (const int& nuc_id : relevant_spent_fuel_comps) {
+  for (const int& nuc_id : nuclides_from_gpr) {
     try {
       // Convert NucID to a human-readable string as used in the json file, for
       // example: '922350001' is converted to 'U235M'.
@@ -697,12 +663,12 @@ cyclus::Composition::Ptr GprReactor::ImportSpentFuelComposition_(double qty) {
   }
   if (cyclus::AlmostEq(sum, 0.)) {
     // This error is thrown if no isotopes contained in
-    // `relevant_spent_fuel_comps` are found in the spent fuel composition file.
+    // `nuclides_from_gpr` are found in the spent fuel composition file.
     // Notably, this prevents the program to continue if the file were empty.
     throw cyclus::ValueError("No relevant isotopes found in the spent fuel!\n");
   }
   // All isotopes part of the spent fuel but not calculated by the Gpr (i.e.,
-  // all isotopes not part of 'relevant_spent_fuel_comps') are `represented' by
+  // all isotopes not part of 'nuclides_from_gpr') are `represented' by
   // hydrogen (H1). This is obviously not correct, but we are not interested in
   // this part of the spent fuel so it should be alright.
   if (!cyclus::AlmostEq(qty, sum)) {
@@ -725,13 +691,26 @@ cyclus::Composition::Ptr GprReactor::ImportSpentFuelComposition_(double qty) {
   return spent_fuel_comp;
 }
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 std::string GprReactor::OutCommod_(cyclus::Material::Ptr m) {
   int i = res_indexes[m->obj_id()];
   if (i >= out_commods.size()) {
     throw cyclus::KeyError("misoenrichment::GprReactor - no outcommod for material object");
   }
   return out_commods[i];
+}
+
+void GprReactor::CheckInput_() {
+  for (const int& nuc_id : nuclides_to_gpr) {
+    if (!pyne::nucname::isnuclide(nuc_id)) {
+      std::stringstream ss;
+      ss << "Nuclide id '" << nuc_id << "' is not a valid nuclide!";
+      throw cyclus::ValueError(ss.str());
+    }
+  }
+
+  if (mass_or_atom_to_gpr != "atom" && mass_or_atom_to_gpr != "mass") {
+    throw cyclus::ValueError("'mass_or_atom_to_gpr' must be 'mass' or 'atom'");
+  }
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

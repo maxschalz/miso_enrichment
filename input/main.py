@@ -1,3 +1,5 @@
+import json
+
 import archetypes
 import commodity
 import control
@@ -15,3 +17,8 @@ def simulation():
     reg = region.region()
 
     return {"simulation": {**arch, **commod, **ctrl, **fac, **recipes, **reg}}
+
+
+if __name__ == "__main__":
+    with open("input_file.json", "w") as f:
+        json.dump(simulation(), f, indent=4)
