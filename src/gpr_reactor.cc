@@ -16,10 +16,6 @@
 #include "pyne.h"
 #include <nlohmann/json.hpp>
 
-// Future changes relating to the implementation of Antonio's GPRs are marked
-// with the following comment:
-// TODO ANTONIO GPR
-
 namespace misoenrichment {
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -42,20 +38,13 @@ GprReactor::GprReactor(cyclus::Context* ctx)
       cycle_step(0),
       discharged(false),
       power_output(0.),
-      temperature(0.),
       res_indexes(std::map<int,int>()),
       is_hybrid(true),
       mass_or_atom_to_gpr(""),
       side_products(std::vector<std::string>()),
       side_product_quantity(std::vector<double>()),
       unique_out_commods(std::set<std::string>()),
-      permitted_fresh_fuel_comps(std::set<int>({922350000, 922380000})),
-      relevant_spent_fuel_comps(std::set<int>(
-          {922320000, 922330000, 922340000, 922350000, 922350001, 922360000,
-           922380000, 922390000, 922400000, 932390000, 932400000, 932400001,
-           932410000, 942380000, 942390000, 942400000, 942410000, 942420000,
-           942430000, 942440000}
-      )),
+      normalisation_nuclide(10010000),
       uid_fname(GetUid_()) {
   // TODO check, e.g., runtime performance to determine if calling PyStart here
   // and doing the imports here (i.e., once) is actually faster or if this is
@@ -574,69 +563,14 @@ void GprReactor::CompositionToOutFile_(cyclus::Composition::Ptr comp,
   cyclus::compmath::Normalize(&cm);
   // Loop over permitted isotopes in composition, add them to the json
   // output file.
-  for (const int& isotope : permitted_fresh_fuel_comps) {
-    double fraction;
-    try {
-      fraction = cm.at(isotope);
-    } catch (const std::out_of_range& e) {
-      fraction = 0.;
-    }
-    std::string nuc_id = std::to_string(isotope);
-    json_object["fresh_fuel_composition"][nuc_id] = fraction;
-  }
-
-  // If the fresh fuel is composed of isotopes other then the permitted ones,
-  // issue a warning that they are ignored. Throwing an error may be more
-  // correct but also potentially overkill as tiny amounts of, e.g., decayed
-  // material do not influence the reactor operation significantly.
-  cyclus::CompMap::iterator compmap_it;
-  std::vector<int> ignored_isotopes;
-  for (compmap_it = cm.begin(); compmap_it != cm.end(); ++compmap_it) {
-    std::set<int>::iterator isotope_it = permitted_fresh_fuel_comps.find(
-        compmap_it->first);
-    if (isotope_it == permitted_fresh_fuel_comps.end()) {
-      ignored_isotopes.push_back(compmap_it->first);
+  for (const auto& [nuclide, fraction] : cm) {
+    if (!cyclus::AlmostEq(fraction, 0.)) {
+      json_object["fresh_fuel_composition"][std::to_string(nuclide)] = fraction;
     }
   }
-  if (ignored_isotopes.size() > 0) {
-    std::stringstream msg;
-    msg << "GprReactor fuel must be composed of (some or all of) the "
-           "following isotopes: ";
-    for (const int& iso : permitted_fresh_fuel_comps) {
-      msg << iso << "\n";
-    }
-    msg << "Other isotopes are present:\n";
-    for (const int& iso : ignored_isotopes) {
-      msg << iso << "\n";
-    }
-    msg << "and they are ignored in the Gpr prediction.\n";
-    cyclus::Warn<cyclus::VALUE_WARNING>(msg.str());
-  }
 
-  // TODO also pass `relevant_spent_fuel_comps` to tell GPR which isotopes to
-  // reconstruct?
-  uint64_t irradiation_time;
-  if (context() != NULL) {
-    const long seconds_per_day = 60 * 60 * 24;
-    irradiation_time = cycle_time * context()->sim_info().dt / seconds_per_day;
-  } else {
-    // kDefaultTimeStepDur defined in cyclus/src/context.h as duration in
-    // seconds of 1/12 of a year, like so:
-    // const uint64_t kDefaultTimeStepDur = 2629846;
-    irradiation_time = cycle_time * kDefaultTimeStepDur;
-  }
-
-  // TODO Update burnup calculation below.
-  // TODO This is strictly speaking not correct in the case of a reactor using
-  // for example uranium dioxide (UO2) as fuel. In that case, the denonimator
-  // would consist only of the mass of uranium, excluding the oxygen mass.
-  double burnup = power_output * irradiation_time / n_assem_core
-                  / assem_size;  // in MWd/kg
-
-  json_object["temperature"] = temperature;  // in K
   json_object["power_output"] = power_output;  // in MWth
-  json_object["irradiation_time"] = irradiation_time;  // in days
-  json_object["burnup"] = burnup;  // Save JSON output in output file.
+  json_object["cycle_time"] = cycle_time;  // in units of simulation timesteps
   std::ofstream file(out_fname, std::ofstream::out | std::ofstream::trunc);
   file << std::setw(2) << json_object << "\n";
   file.close();
@@ -676,39 +610,30 @@ cyclus::Composition::Ptr GprReactor::ImportSpentFuelComposition_(double qty) {
     throw cyclus::IOError(msg.str());
   }
 
+  // Read out all nuclides stored in the spent fuel composition.
   cyclus::CompMap cm;
-  // This variable is the ratio of the material to be transmuted ('qty' kg) to
-  // the mass of the full core.
-  const double fraction_of_core = qty / (n_assem_core * assem_size);
-  // 'mass' is the absolute mass of the isotope in question in a full reactor
-  // core after one irradiation period.
-  double mass;
-  double sum = 0;
-
-  for (const int& nuc_id : relevant_spent_fuel_comps) {
+  double sum = 0;  // Used later for normalisation.
+  int nuclide;
+  double fraction;
+  for (const auto& composition : json_object.at("spent_fuel_composition").items()) {
     try {
-      // Convert NucID to a human-readable string as used in the json file, for
-      // example: '922350001' is converted to 'U235M'.
-      std::string key = pyne::nucname::name(nuc_id);
-      mass = json_object.at("spent_fuel_composition").at(key);
+      nuclide = pyne::nucname::id(composition.key());
+      fraction = composition.value();
     } catch (const nlohmann::detail::out_of_range& e) {
       continue;
     }
-    cm[nuc_id] = mass * fraction_of_core;
-    sum += mass * fraction_of_core;
+    cm[nuclide] = fraction;
+    sum += fraction;
   }
   if (cyclus::AlmostEq(sum, 0.)) {
-    // This error is thrown if no isotopes contained in
-    // `relevant_spent_fuel_comps` are found in the spent fuel composition file.
-    // Notably, this prevents the program to continue if the file were empty.
-    throw cyclus::ValueError("No relevant isotopes found in the spent fuel!\n");
+    throw cyclus::ValueError("No nuclides stored in the spent fuel file!\n");
   }
-  // All isotopes part of the spent fuel but not calculated by the Gpr (i.e.,
-  // all isotopes not part of 'relevant_spent_fuel_comps') are `represented' by
-  // hydrogen (H1). This is obviously not correct, but we are not interested in
-  // this part of the spent fuel so it should be alright.
+
+  // Use 'normalisation_nuclide' to normalise the spent fuel composition to
+  // one. This value corresponds to the fraction of all nuclides present in the
+  // spent fuel but not predicted by the GPRs.
   if (!cyclus::AlmostEq(qty, sum)) {
-    cm[10010000] = qty - sum;
+    cm[normalisation_nuclide] = 1. - sum;
   }
 
   Composition::Ptr spent_fuel_comp;
@@ -726,7 +651,6 @@ cyclus::Composition::Ptr GprReactor::ImportSpentFuelComposition_(double qty) {
     }
     throw cyclus::ValueError(msg.str());
   }
-
   return spent_fuel_comp;
 }
 
