@@ -88,6 +88,13 @@ class GprReactor : public cyclus::Facility, public cyclus::toolkit::Position  {
   std::vector<double> fuel_prefs;
 
   std::set<std::string> unique_out_commods;
+
+  #pragma cyclus var { \
+    "doc": "Indicate whether the GPRs use atom or mass fractions for the " \
+           "composition. Must be 'atom' or 'mass'." \
+  }
+  std::string mass_or_atom_to_gpr;
+
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // Core specifics
   #pragma cyclus var { \
@@ -282,6 +289,7 @@ class GprReactor : public cyclus::Facility, public cyclus::toolkit::Position  {
   std::map<std::string, cyclus::toolkit::MatVec> PeekSpent_();
   std::map<std::string, cyclus::toolkit::MatVec> PopSpent_();
   std::string OutCommod_(cyclus::Material::Ptr m);
+  void CheckInput_();
   void CompositionToOutFile_(cyclus::Composition::Ptr comp,
                              bool delete_outfile = false);
   void IndexRes_(cyclus::Resource::Ptr m, std::string incommod);

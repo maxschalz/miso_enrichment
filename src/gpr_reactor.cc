@@ -45,6 +45,7 @@ GprReactor::GprReactor(cyclus::Context* ctx)
       temperature(0.),
       res_indexes(std::map<int,int>()),
       is_hybrid(true),
+      mass_or_atom_to_gpr(""),
       side_products(std::vector<std::string>()),
       side_product_quantity(std::vector<double>()),
       unique_out_commods(std::set<std::string>()),
@@ -232,6 +233,8 @@ void GprReactor::AcceptMatlTrades(
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void GprReactor::EnterNotify() {
   cyclus::Facility::EnterNotify();
+
+  CheckInput_();
 
   if (fuel_prefs.size() == 0) {
     for (int i = 0; i < out_commods.size(); i++) {
@@ -567,8 +570,7 @@ void GprReactor::CompositionToOutFile_(cyclus::Composition::Ptr comp,
                                        bool delete_outfile) {
   nlohmann::json json_object;
 
-  // TODO check if GPRs use mass or atom percent
-  cyclus::CompMap cm = comp->atom();
+  cyclus::CompMap cm = mass_or_atom_to_gpr == "atom" ? comp->atom() : comp->mass();
   cyclus::compmath::Normalize(&cm);
   // Loop over permitted isotopes in composition, add them to the json
   // output file.
@@ -709,10 +711,13 @@ cyclus::Composition::Ptr GprReactor::ImportSpentFuelComposition_(double qty) {
     cm[10010000] = qty - sum;
   }
 
-  // TODO check if Gpr uses atom or mass fraction
   Composition::Ptr spent_fuel_comp;
   try {
-    spent_fuel_comp = Composition::CreateFromMass(cm);
+    if (mass_or_atom_to_gpr == "atom") {
+      spent_fuel_comp = Composition::CreateFromAtom(cm);
+    } else {
+      spent_fuel_comp = Composition::CreateFromMass(cm);
+    }
   } catch (const cyclus::ValueError& e) {
     std::stringstream msg;
     msg << e.msg() << "\nErroneous composition in GprReactor:\n";
@@ -732,6 +737,13 @@ std::string GprReactor::OutCommod_(cyclus::Material::Ptr m) {
     throw cyclus::KeyError("misoenrichment::GprReactor - no outcommod for material object");
   }
   return out_commods[i];
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+void GprReactor::CheckInput_() {
+  if (mass_or_atom_to_gpr != "atom" && mass_or_atom_to_gpr != "mass") {
+    throw cyclus::ValueError("'mass_or_atom_to_gpr' must be 'mass' or 'atom'");
+  }
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
