@@ -53,9 +53,9 @@ class GprReactorTest : public ::testing::Test {
   inline std::string DoGetInFname() {
     return facility->in_fname;
   }
-  inline void DoCompositionToOutFile(cyclus::Composition::Ptr comp,
+  inline void DoParamsToOutFile_(cyclus::Composition::Ptr comp,
                                      bool delete_txt) {
-    facility->CompositionToOutFile_(comp, delete_txt);
+    facility->ParamsToOutFile_(comp, delete_txt);
   }
   inline void DoTransmute() {
     facility->Transmute_();

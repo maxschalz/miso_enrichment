@@ -6,11 +6,10 @@ Calculate the composition of spent fuel based on a set of trained GPRs.
 This module is part of the misoenrichment module for Cyclus, see
 https://github.com/maxschalz/miso_enrichment/ .
 
-The module is strongly based on Antonio Figueroa's work, who kindly
-provided the original code. For more information, please see
-https://doi.org/10.1016/j.anucene.2020.108085
-or https://arxiv.org/abs/2006.12921
-or https://github.com/FigueroaAC/GPs-for-SpentFuel
+The module uses Benjamin Jung's Gaussian Process regression work, see
+https://github.com/jung-benjamin/gp-surfer or https://doi.org/10.5281/zenodo.15576628.
+The authors also would like to thank Antonio Figueroa, whose GPR code was used
+previously.
 """
 
 __author__ = "Nuclear Verification and Disarmament Group, RWTH Aachen University"
@@ -18,10 +17,9 @@ __copyright__ = (
     "Copyright 2020-2025, Nuclear Verification and Disarmament Group, "
     "RWTH Aachen University"
 )
-__credits__ = ["Antonio Figueroa", "Max Schalz"]
+__credits__ = ["Antonio Figueroa", "Benjamin Jung", "Max Schalz"]
 __license__ = "BSD-3-Clause"
 __version__ = "2.0"
 __maintainer__ = "Max Schalz"
 
-from .kernel import *
 from .predict_posterior import *

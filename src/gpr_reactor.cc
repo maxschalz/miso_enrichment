@@ -45,6 +45,8 @@ GprReactor::GprReactor(cyclus::Context* ctx)
       side_product_quantity(std::vector<double>()),
       unique_out_commods(std::set<std::string>()),
       normalisation_nuclide(10010000),
+      path_to_kernel_filepaths(""),
+      gp_input_params_and_order(""),
       uid_fname(GetUid_()) {
   // TODO check, e.g., runtime performance to determine if calling PyStart here
   // and doing the imports here (i.e., once) is actually faster or if this is
@@ -513,7 +515,7 @@ void GprReactor::Transmute_(int n_assem) {
   int python_exit_code = 0;
   python_exit_code += PyRun_SimpleString("import spentfuelgpr");
   for (int i = 0; i < old.size(); ++i) {
-    CompositionToOutFile_(old[i]->comp(), false);
+    ParamsToOutFile_(old[i]->comp(), false);
     std::stringstream ss;
     ss << "spentfuelgpr.predict(" << uid_fname << ")";
     python_exit_code += PyRun_SimpleString(ss.str().c_str());
@@ -555,8 +557,8 @@ void GprReactor::Transmute_(int n_assem) {
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void GprReactor::CompositionToOutFile_(cyclus::Composition::Ptr comp,
-                                       bool delete_outfile) {
+void GprReactor::ParamsToOutFile_(cyclus::Composition::Ptr comp,
+                                  bool delete_outfile) {
   nlohmann::json json_object;
 
   cyclus::CompMap cm = mass_or_atom_to_gpr == "atom" ? comp->atom() : comp->mass();
@@ -565,12 +567,15 @@ void GprReactor::CompositionToOutFile_(cyclus::Composition::Ptr comp,
   // output file.
   for (const auto& [nuclide, fraction] : cm) {
     if (!cyclus::AlmostEq(fraction, 0.)) {
-      json_object["fresh_fuel_composition"][std::to_string(nuclide)] = fraction;
+      json_object[std::to_string(nuclide)] = fraction;
     }
   }
 
   json_object["power_output"] = power_output;  // in MWth
   json_object["cycle_time"] = cycle_time;  // in units of simulation timesteps
+  json_object["refuel_time"] = refuel_time;  // in units of simulation timesteps
+  json_object["path_to_kernel_filepaths"] = path_to_kernel_filepaths;
+  json_object["gp_input_params_and_order"] = gp_input_params_and_order;
   std::ofstream file(out_fname, std::ofstream::out | std::ofstream::trunc);
   file << std::setw(2) << json_object << "\n";
   file.close();
@@ -601,21 +606,12 @@ cyclus::Composition::Ptr GprReactor::ImportSpentFuelComposition_(double qty) {
   file >> json_object;
   file.close();
 
-  try {
-    json_object.at("spent_fuel_composition");
-  } catch (const nlohmann::detail::out_of_range& e) {
-    std::stringstream msg;
-    msg << "Cannot find key 'spent_fuel_composition' in '" << in_fname << "'."
-        << "\nException id: " << e.id;
-    throw cyclus::IOError(msg.str());
-  }
-
   // Read out all nuclides stored in the spent fuel composition.
   cyclus::CompMap cm;
   double sum = 0;  // Used later for normalisation.
   int nuclide;
   double fraction;
-  for (const auto& composition : json_object.at("spent_fuel_composition").items()) {
+  for (const auto& composition : json_object.items()) {
     try {
       nuclide = pyne::nucname::id(composition.key());
       fraction = composition.value();

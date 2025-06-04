@@ -239,6 +239,22 @@ class GprReactor : public cyclus::Facility, public cyclus::toolkit::Position  {
   }
   int normalisation_nuclide;
 
+  #pragma cyclus var { \
+    "doc": "Path to the JSON file which in turn contains the paths to the " \
+           "different trained kernels. It is recommended to indicate the " \
+           "absolute, not the relative, path." \
+  }
+  std::string path_to_kernel_filepaths;
+
+  #pragma cyclus var { \
+    "doc": "Names of the parameters passed as input to the GPRs, separated " \
+           "by spaces. IMPORTANT NOTE: " \
+           "The order of the names must correspond to the order used in the " \
+           "GP calculations, and any nuclide names must be indicated in " \
+           "canonical form (10010000 for H-1, 922350001 for U-235m, etc)." \
+  }
+  std::string gp_input_params_and_order;
+
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // Material buffers
   # pragma cyclus var {"capacity": "n_assem_fresh * assem_size"}
@@ -287,8 +303,8 @@ class GprReactor : public cyclus::Facility, public cyclus::toolkit::Position  {
 
   // Writes *all* nuclides in the fresh fuel into a JSON file, as well as
   // power and cycle time (this may be extended if needed).
-  void CompositionToOutFile_(cyclus::Composition::Ptr comp,
-                             bool delete_outfile = false);
+  void ParamsToOutFile_(cyclus::Composition::Ptr comp,
+                        bool delete_outfile = false);
   void IndexRes_(cyclus::Resource::Ptr m, std::string incommod);
   void Load_();
   void Record_(std::string name, std::string val);

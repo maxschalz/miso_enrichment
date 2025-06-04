@@ -147,10 +147,10 @@ TEST_F(GprReactorTest, ExportCompositions) {
   Composition::Ptr invalid_comp = gpr_reactor_test::invalid_composition();
   // Expect no throw but this test should nonetheless issue a warning statement
   // in stdout!
-  EXPECT_NO_THROW(DoCompositionToOutFile(invalid_comp, true));
+  EXPECT_NO_THROW(DoParamsToOutFile_(invalid_comp, true));
 
   Composition::Ptr valid_comp = gpr_reactor_test::valid_composition();
-  EXPECT_NO_THROW(DoCompositionToOutFile(valid_comp, true));
+  EXPECT_NO_THROW(DoParamsToOutFile_(valid_comp, true));
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
