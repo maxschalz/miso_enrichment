@@ -4,7 +4,7 @@
 
 `misoenrichment` is a module for the nuclear fuel cycle simulator
 [Cyclus](http://fuelcycle.org) and is developed at the
-[Nuclear Verification and Disarmament Group](https://www.nvd.rwth-aachen.de/)
+[Nuclear Verification and Disarmament Group (NVD)](https://www.nvd.rwth-aachen.de/)
 at RWTH Aachen University.
 It currently provides two Cyclus facilities, `MIsoEnrich` and `GprReactor`.
 
@@ -19,25 +19,32 @@ isotopes makes this module suitable for nuclear archaeology, see, e.g., Ref 3.
 Regression (GPR) to calculate the composition of the irradiated fuel depending
 on various input parameters. Generally, this implementation works for any
 reactor type and any input parameters. However, one needs the appropriate
-GPR model (which needs to be generated using training data) and depending
-on which input parameters are chosen, the source code of `GprReactor` may
-need minor tweaking. Additional information on this issue will be given
-in future commits.
+GPR model (which needs to be generated using training data).
+Additional information on how to do this may be given in future commits.
+Moreover, `GprReactor` uses NVD's own Python package to perform Gaussian
+process regressions, developed by [Benjamin
+Jung](https://github.com/jung-benjamin) and available at
+[jung-benjamin/gp-surfer](https://github.com/jung-benjamin/gp-surfer) or
+at [doi.org/10.5281/zenodo.15576628](https://doi.org/10.5281/zenodo.15576628)
+(tarball of releases only).
+For now, `gp-surfer` has to be downloaded and installed (via `pip install .`)
+manually by the user.
+This might be automated in future commits.
 
-## MIsoEnrich
-### Installation
+
+## Installation
 In order to use the `VarRecipeSource` archetype, a [patched version of
 Cyclus](https://github.com/maxschalz/cyclus/tree/add-datatype) needs to be
 used (commit [`15e1f30`](https://github.com/maxschalz/cyclus/commit/15e1f303be4335a6545e8a7d1752d6195a4e72ff)) or later.
 This patch will be integrated into Cyclus' main branch.
 The module has additional dependencies.
-Python dependencies ([`scipy`](https://github.com/scipy/scipy) and
-[`numpy`](https://github.com/numpy/numpy) are installed automatically via `pip`,
-while the C++ dependencies
+Python dependencies ([`gp-surfer`](https://github.com/jung-benjamin/gp-surfer),
+needed for `GprReactor`, has to be installed by the user.
+The C++ dependencies
 ([CppOptimizationLibrary](https://github.com/PatWie/CppNumericalSolvers/tree/master),
-[Eigen](https://eigen.tuxfamily.org/) and
-[JSON for Modern C++](https://github.com/nlohmann/json)) are included as Git
-submodules.
+[Eigen](https://eigen.tuxfamily.org`) for `MIsoEnrich` and
+[JSON for Modern C++](https://github.com/nlohmann/json) for `GprReactor`) are
+included as Git submodules.
 These need to be fetched first, as shown below:
 ```
 $ git clone https://github.com/Nuclear-Verification-and-Disarmament/miso_enrichment.git
@@ -48,7 +55,22 @@ $ misoenrichment_unit_tests  # Run unit tests (optional).
 ```
 
 ### Getting started
-An example input file is found in `input/main.py` featuring a
+Examples are found in `examples/`.
+
+`examples/gpr_reactor_var_recipe_source` contains a small fuel cycle composed
+of a natural uranium mine with slightly varying U-234 and U-235 content
+(`VarRecipeSource`), and a graphite moderated, natural uranium fueled reactor
+that uses GPRs to calculate the spent fuel composition as a function of the
+irradiation time and the U-234, U-235 and U-238 composition in the fresh fuel
+(`GprReactor`).
+_Please note_: This simulation can be run using `python main.py --run` from
+within this examples subdirectory.
+However, before the first run the trained GPR kernels need to be extracted
+by running `tar -xvf trained_kernels.tar.gz`.
+
+_Please note that the following description may be outdated. It will be updated
+in future commits._  
+`examples/main.py` features a
 `cycamore::Source` source agent, a `MIsoEnrich` enrichment facility and two
 `cycamore::Sink` agents, one for enriched and one for depleted uranium.
 
