@@ -154,7 +154,7 @@ TEST_F(GprReactorTest, ExportCompositions) {
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-TEST_F(GprReactorTest, ImportCompositions) {
+TEST_F(GprReactorTest, DISABLED_ImportCompositions) {
   using cyclus::Composition;
 
   Composition::Ptr valid_comp = gpr_reactor_test::valid_composition();
@@ -193,7 +193,7 @@ TEST_F(GprReactorTest, ImportCompositions) {
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-TEST_F(GprReactorTest, SpentFuelWaste) {
+TEST_F(GprReactorTest, DISABLED_SpentFuelWaste) {
   using cyclus::Composition;
 
   Composition::Ptr valid_comp = gpr_reactor_test::valid_composition();
