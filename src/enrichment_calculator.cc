@@ -125,7 +125,7 @@ void EnrichmentCalculator::PPrint() {
             << "  n(enriching)           " << n_enriching << "\n"
             << "  n(stripping)           " << n_stripping << "\n"
             << "  Enrichment process     " << enrichment_process << "\n"
-            << "  Separation factors         232     233      234      235"
+            << "  Separation factors        232      233      234      235"
             << "      236      238\n                         ";
   for (int nuc : isotopes) {
     printf("%6.4f   ", separation_factors[nuc]);
@@ -283,10 +283,23 @@ void EnrichmentCalculator::CalculateDecimalStages_() {
   cppoptlib::BfgsSolver<EnrichmentProblem> solver;
 
   // Offer multiple starting values to the solver to improve convergence.
-  std::vector<double> n_init_stages({1, 10, 50});
+  std::vector<double> n_init_stages;
+  std::pair<double, double> bounds_staging;
+  bounds_staging.first = 0;
+  if (enrichment_process == "centrifuge") {
+    double initial[3] = {1, 10, 50};
+    n_init_stages.assign(initial, initial + 3);
+    bounds_staging.second = 100;
+  } else {
+    double initial[4] = {50, 500, 1000, 5000};
+    n_init_stages.assign(initial, initial + 4);
+    bounds_staging.second = 10000;
+  }
+
   cppoptlib::Problem<double>::TVector staging(2);
 
   bool found_solution = false;
+  const double minimization_threshold = 1e-5;
   for (double n_init_enriching : n_init_stages) {
     for (double n_init_stripping : n_init_stages) {
       staging[0] = n_init_enriching;
@@ -295,9 +308,9 @@ void EnrichmentCalculator::CalculateDecimalStages_() {
       // Rough sanity checks to ensure that no non-sensical solution got used.
       // Maybe this will be replaced later by a bounded problem.
       if (
-        problem(staging) < 1e-6
-        && staging[0] > 0 && staging[0] < 100
-        && staging[1] > 0 && staging[1] < 100
+        problem(staging) < minimization_threshold
+        && bounds_staging.first < staging[0] && staging[0] < bounds_staging.second
+        && bounds_staging.first < staging[1] && staging[1] < bounds_staging.second
       ) {
         found_solution = true;
         break;
@@ -309,7 +322,12 @@ void EnrichmentCalculator::CalculateDecimalStages_() {
   }
   if (!found_solution) {
     PPrint();
-    throw cyclus::Error("Did not manage to determine the correct staging!");
+    std::stringstream err_msg;
+    err_msg << "Did not manage to determine the correct staging! "
+            << "Optimization yields " << problem(staging)
+            << " which is larger than the threshold value of "
+            << minimization_threshold;
+    throw cyclus::Error(err_msg.str());
   }
   n_enriching = staging[0];
   n_stripping = staging[1];
