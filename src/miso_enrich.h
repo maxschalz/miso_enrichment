@@ -31,11 +31,25 @@ class SwuConverter : public cyclus::Converter<cyclus::Material> {
 
     double product_qty = m->quantity();
     double product_assay = MIsoAtomAssay(m);
-    EnrichmentCalculator e(feed_comp_, product_assay, tails_assay_, gamma_235_,
+    cyclus::CompMap feed_cm = feed_comp_->atom();
+
+    double swu_used;
+    try {
+    EnrichmentCalculator e(feed_cm, product_assay, tails_assay_, gamma_235_,
                            enrichment_process_,
                            1e299, product_qty, 1e299, use_downblending,
                            use_integer_stages);
-    double swu_used = e.SwuUsed();
+    swu_used = e.SwuUsed();
+
+    } catch (cyclus::Error& err) {
+      std::stringstream ss;
+      ss << "SWU converter " << " with feed " << " containing " 
+                << MIsoAtomAssay(feed_comp_) << " percent 235. Request for " << product_qty
+                << " of " << product_assay << " percent enriched material.\n"
+                << "Enrichment calculator msg:\n" << err.what();
+
+      throw cyclus::ValueError(ss.str());
+    }
 
     return swu_used;
   }
@@ -81,11 +95,27 @@ class FeedConverter : public cyclus::Converter<cyclus::Material> {
 
     double product_qty = m->quantity();
     double product_assay = MIsoAtomAssay(m);
-    EnrichmentCalculator e(feed_comp_, product_assay, tails_assay_, gamma_235_,
-                           enrichment_process_,
-                           1e299, product_qty, 1e299, use_downblending,
-                           use_integer_stages);
-    double feed_used = e.FeedUsed();
+    cyclus::CompMap feed_cm = feed_comp_->atom();
+    double feed_used;
+    try {
+      EnrichmentCalculator e(feed_cm, product_assay, tails_assay_, gamma_235_,
+                             enrichment_process_,
+                             1e299, product_qty, 1e299, use_downblending,
+                             use_integer_stages);
+      feed_used = e.FeedUsed();
+    } catch (cyclus::Error& err) {
+      std::stringstream ss;
+      ss << "Feed converter " << " with feed " << " containing " 
+                << MIsoAtomAssay(feed_comp_) << " percent 235. precise composition:\n";
+      for (auto const& x : feed_cm) {
+        ss << x.first << ": " << x.second << "\n";
+      }
+      ss << "Request for " << product_qty
+                << " of " << product_assay << " percent enriched material.\n"
+                << "Enrichment calculator msg:\n" << err.what();
+
+      throw cyclus::ValueError(ss.str());
+    }
 
     cyclus::toolkit::MatQuery mq(m);
     std::vector<int> isotopes(IsotopesNucID());
@@ -176,10 +206,14 @@ class MIsoEnrich : public cyclus::Facility,
 
   cyclus::Material::Ptr Enrich_(cyclus::Material::Ptr mat, double qty);
 
+  // Feed composition averaged over whole feed inventory
+  cyclus::CompMap FeedCompMap();
+  cyclus::Composition::Ptr FeedComp();
+
   bool ValidReq_(const cyclus::Material::Ptr& mat);
 
   ///  @brief records and enrichment with the cyclus::Recorder
-  void RecordEnrichment_(double feed_qty, double swu, int feed_inv_idx);
+  void RecordEnrichment_(double feed_qty, double swu);
 
   /// Records an agent's latitude and longitude to the output db
   void RecordPosition();
@@ -293,12 +327,8 @@ class MIsoEnrich : public cyclus::Facility,
   double intra_timestep_feed;
 
   // TODO think about how to include these variables in preprocessor
-  //#pragma cyclus var {}
-  std::vector<cyclus::toolkit::ResBuf<cyclus::Material> > feed_inv;
-  //#pragma cyclus var {}
-  std::vector<cyclus::Composition::Ptr> feed_inv_comp;
-
-  int feed_idx;
+  #pragma cyclus var {}
+  cyclus::toolkit::ResBuf<cyclus::Material> feed_inv;
 
   #pragma cyclus var {}
   cyclus::toolkit::ResBuf<cyclus::Material> tails_inv;

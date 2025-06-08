@@ -20,8 +20,7 @@ class EnrichmentCalculator {
   FRIEND_TEST(EnrichmentCalculatorTest, AssignmentOperator);
 
   EnrichmentCalculator();
-  EnrichmentCalculator(double gamma_235, std::string enrichment_process);
-  EnrichmentCalculator(cyclus::Composition::Ptr feed_comp,
+  EnrichmentCalculator(cyclus::CompMap feed_comp,
                        double target_product_assay,
                        double target_tails_assay, double gamma,
                        std::string enrichment_process,
@@ -35,17 +34,17 @@ class EnrichmentCalculator {
 
   void BuildMatchedAbundanceRatioCascade();
 
-  void SetInput(cyclus::Composition::Ptr new_feed_composition,
+  void SetInput(cyclus::CompMap new_feed_composition,
       double new_target_product_assay, double new_target_tails_assay,
       double new_feed_qty, double new_product_qty, double new_max_swu,
       double gamma_235, std::string enrichment_process, bool use_downblending);
 
-  void EnrichmentOutput(cyclus::Composition::Ptr& product_comp,
-                        cyclus::Composition::Ptr& tails_comp, double& feed_used,
-                        double& swu_used, double& product_produced,
-                        double& tails_produced, double& n_enrich,
-                        double& n_strip);
-  void ProductOutput(cyclus::Composition::Ptr&, double&);
+  void EnrichmentOutput(cyclus::CompMap& product_compmap,
+                        cyclus::CompMap& tails_compmap,
+                        double& feed_used, double& swu_used,
+                        double& product_produced, double& tails_produced,
+                        double& n_enrich, double& n_strip);
+  void ProductOutput(cyclus::CompMap&, double&);
 
   inline double FeedUsed() { return feed_qty; }
   inline double SwuUsed() { return swu; }

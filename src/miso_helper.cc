@@ -134,6 +134,11 @@ int NucIDToIsotope(int nuc_id) {
 int ResBufIdx(
     const std::vector<cyclus::Composition::Ptr>& buf_compositions,
     const cyclus::Composition::Ptr& in_comp) {
+
+  cyclus::Warn<cyclus::DEPRECATION_WARNING>(
+      "This function is currently not needed and may be deleted in the future."
+  );
+
   cyclus::CompMap in_compmap = in_comp->atom();
   cyclus::compmath::Normalize(&in_compmap);
 

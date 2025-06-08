@@ -16,24 +16,17 @@ namespace misoenrichment {
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Constructor delegation only possible from C++11 onwards, CMake checks if
 // C++11 is supported.
-EnrichmentCalculator::EnrichmentCalculator() : EnrichmentCalculator(
-    1.4, "centrifuge") {}
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-// Constructor delegation only possible from C++11 onwards, CMake checks if
-// C++11 is supported.
-EnrichmentCalculator::EnrichmentCalculator(double gamma_235,
-                                           std::string enrichment_process) :
-  EnrichmentCalculator(misotest::comp_reprocessedU(), 0.05, 0.003,
-                       gamma_235, enrichment_process, 1, 1, 1e299, true) {}
+EnrichmentCalculator::EnrichmentCalculator() :
+    EnrichmentCalculator(cyclus::CompMap(), 0.05, 0.003, 1.4,
+                         "centrifuge", 1, 1, 1e299, true, true) {}
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 EnrichmentCalculator::EnrichmentCalculator(
-    cyclus::Composition::Ptr feed_comp,
+    cyclus::CompMap feed_comp,
     double target_product_assay, double target_tails_assay,
     double gamma_235, std::string enrichment_process, double feed_qty, double product_qty,
     double max_swu, bool use_downblending, bool use_integer_stages) :
-      feed_composition(feed_comp->atom()),
+      feed_composition(feed_comp),
       target_product_assay(target_product_assay),
       target_tails_assay(target_tails_assay),
       gamma_235(gamma_235),
@@ -141,13 +134,13 @@ void EnrichmentCalculator::PPrint() {
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void EnrichmentCalculator::SetInput(
-    cyclus::Composition::Ptr new_feed_composition,
+    cyclus::CompMap new_feed_composition,
     double new_target_product_assay, double new_target_tails_assay,
     double new_feed_qty, double new_product_qty, double new_max_swu,
     double new_gamma_235, std::string new_enrichment_process,
     bool new_use_downblending) {
 
-  feed_composition = new_feed_composition->atom();
+  feed_composition = new_feed_composition;
   cyclus::compmath::Normalize(&feed_composition);
 
   if (new_gamma_235 != gamma_235
@@ -205,7 +198,7 @@ void EnrichmentCalculator::SetInput(
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void EnrichmentCalculator::EnrichmentOutput(
-    cyclus::Composition::Ptr& product_comp, cyclus::Composition::Ptr& tails_comp,
+    cyclus::CompMap& product_cm, cyclus::CompMap& tails_cm,
     double& feed_used, double& swu_used, double& product_produced,
     double& tails_produced, double& n_enrich, double& n_strip) {
 
@@ -213,14 +206,16 @@ void EnrichmentCalculator::EnrichmentOutput(
   // unknown reasons by cyclus::Material::ExtractComp and
   // cyclus::compmath::ApplyThreshold. See also Cyclus issue #1524:
   // https://github.com/cyclus/cyclus/issues/1524
-  cyclus::CompMap cm;
   for (const auto& x : product_composition) {
     if (x.second > 0) {
-      cm[x.first] = x.second;
+      product_cm[x.first] = x.second;
     }
   }
-  product_comp = cyclus::Composition::CreateFromAtom(cm);
-  tails_comp = cyclus::Composition::CreateFromAtom(tails_composition);
+  for (const auto& x : tails_composition) {
+    if (x.second > 0) {
+      tails_cm[x.first] = x.second;
+    }
+  }
 
   feed_used = feed_qty;
   swu_used = swu;
@@ -232,9 +227,9 @@ void EnrichmentCalculator::EnrichmentOutput(
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-void EnrichmentCalculator::ProductOutput(
-    cyclus::Composition::Ptr& old_product_comp, double& old_product_qty) {
-  old_product_comp = cyclus::Composition::CreateFromAtom(product_composition);
+void EnrichmentCalculator::ProductOutput(cyclus::CompMap& old_product_comp,
+                                         double& old_product_qty) {
+  old_product_comp = product_composition;
   old_product_qty = product_qty;
 }
 
