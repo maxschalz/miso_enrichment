@@ -18,14 +18,15 @@ namespace misoenrichment {
 // C++11 is supported.
 EnrichmentCalculator::EnrichmentCalculator() :
     EnrichmentCalculator(cyclus::CompMap(), 0.05, 0.003, 1.4,
-                         "centrifuge", 1, 1, 1e299, true, true) {}
+                         "centrifuge", 1, 1, 1e299, true, true, -1, -1) {}
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 EnrichmentCalculator::EnrichmentCalculator(
     cyclus::CompMap feed_comp,
     double target_product_assay, double target_tails_assay,
     double gamma_235, std::string enrichment_process, double feed_qty, double product_qty,
-    double max_swu, bool use_downblending, bool use_integer_stages) :
+    double max_swu, bool use_downblending, bool use_integer_stages,
+    double n_init_enriching, double n_init_stripping) :
       feed_composition(feed_comp),
       target_product_assay(target_product_assay),
       target_tails_assay(target_tails_assay),
@@ -37,6 +38,8 @@ EnrichmentCalculator::EnrichmentCalculator(
       max_swu(max_swu),
       use_downblending(use_downblending),
       use_integer_stages(use_integer_stages),
+      n_init_enriching(n_init_enriching),
+      n_init_stripping(n_init_stripping),
       isotopes(IsotopesNucID()) {
   if (feed_qty==1e299 && product_qty==1e299 && max_swu==1e299) {
     // TODO think about whether one or two of these variables have to be
@@ -201,7 +204,6 @@ void EnrichmentCalculator::EnrichmentOutput(
     cyclus::CompMap& product_cm, cyclus::CompMap& tails_cm,
     double& feed_used, double& swu_used, double& product_produced,
     double& tails_produced, double& n_enrich, double& n_strip) {
-
   // This step is needed to prevent a 'double free' error. It is caused for
   // unknown reasons by cyclus::Material::ExtractComp and
   // cyclus::compmath::ApplyThreshold. See also Cyclus issue #1524:
@@ -276,39 +278,63 @@ void EnrichmentCalculator::CalculateDecimalStages_() {
   // minimised.
   EnrichmentProblem problem(this);
   cppoptlib::BfgsSolver<EnrichmentProblem> solver;
+  cppoptlib::Problem<double>::TVector staging(2);
+  const double minimization_threshold = 1e-5;
 
-  // Offer multiple starting values to the solver to improve convergence.
+  // If the user has defined initial values, first try using these.
+  if (n_init_enriching > 0. && n_init_stripping > 0.) {
+    staging[0] = n_init_enriching;
+    staging[1] = n_init_stripping;
+    solver.minimize(problem, staging);
+
+    // If successful, calculate definitive concentrations and exit function.
+    if (problem.value(staging) < minimization_threshold) {
+      n_enriching = staging[0];
+      n_stripping = staging[1];
+      CalculateConcentrations_();
+      return;
+    }
+  }
+
+  // If no user-defined or unsuccessful initial values, use iterative process
+  // with pre-set initial values.
   std::vector<double> n_init_stages;
-  std::pair<double, double> bounds_staging;
-  bounds_staging.first = 0;
+  std::pair<double, double> bounds;
+  bounds.first = 0;
   if (enrichment_process == "centrifuge") {
     double initial[3] = {1, 10, 50};
     n_init_stages.assign(initial, initial + 3);
-    bounds_staging.second = 100;
+    bounds.second = 100;
   } else {
     double initial[4] = {50, 500, 1000, 5000};
     n_init_stages.assign(initial, initial + 4);
-    bounds_staging.second = 10000;
+    bounds.second = 10000;
   }
-
-  cppoptlib::Problem<double>::TVector staging(2);
-
   bool found_solution = false;
-  const double minimization_threshold = 1e-5;
-  for (double n_init_enriching : n_init_stages) {
-    for (double n_init_stripping : n_init_stages) {
-      staging[0] = n_init_enriching;
-      staging[1] = n_init_stripping;
+  double current_minimization;
+  double best_minimization = 100;  // Only relevant for error msg
+  std::pair<double, double> best_n_init;  // Only relevant for error msg
+  for (double n_init_enr : n_init_stages) {
+    for (double n_init_str : n_init_stages) {
+      staging[0] = n_init_enr;
+      staging[1] = n_init_str;
       solver.minimize(problem, staging);
-      // Rough sanity checks to ensure that no non-sensical solution got used.
-      // Maybe this will be replaced later by a bounded problem.
+      current_minimization = problem.value(staging);
+
+      // The two latter conditions are rough sanity checks to ensure that no
+      // non-sensical solution is used. Maybe this will be replaced later by a
+      // bounded problem. See issue #19.
       if (
-        problem(staging) < minimization_threshold
-        && bounds_staging.first < staging[0] && staging[0] < bounds_staging.second
-        && bounds_staging.first < staging[1] && staging[1] < bounds_staging.second
+          current_minimization < minimization_threshold
+          && bounds.first < staging[0] && staging[0] < bounds.second
+          && bounds.first < staging[1] && staging[1] < bounds.second
       ) {
         found_solution = true;
         break;
+      }
+      if (current_minimization < best_minimization) {
+        best_minimization = current_minimization;
+        best_n_init = {n_init_enr, n_init_str};
       }
     }
     if (found_solution) {
@@ -316,14 +342,18 @@ void EnrichmentCalculator::CalculateDecimalStages_() {
     }
   }
   if (!found_solution) {
+    n_enriching = best_n_init.first;
+    n_stripping = best_n_init.second;
+    CalculateConcentrations_();
     PPrint();
     std::stringstream err_msg;
     err_msg << "Did not manage to determine the correct staging! "
-            << "Optimization yields " << problem(staging)
+            << "Best optimization yielded " << best_minimization
             << " which is larger than the threshold value of "
             << minimization_threshold;
     throw cyclus::Error(err_msg.str());
   }
+  // Use result to calculate the definitive concentrations.
   n_enriching = staging[0];
   n_stripping = staging[1];
   CalculateConcentrations_();

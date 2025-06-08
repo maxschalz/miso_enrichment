@@ -32,7 +32,10 @@ MIsoEnrich::MIsoEnrich(cyclus::Context* ctx)
       longitude(0.0),
       coordinates(latitude, longitude),
       use_integer_stages(true),
-      use_downblending(true) {}
+      use_downblending(true),
+      n_init_enriching(-1),
+      n_init_stripping(-1),
+      update_n_init_stages(true) {}
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 MIsoEnrich::~MIsoEnrich() {}
@@ -215,11 +218,13 @@ std::set<cyclus::BidPortfolio<cyclus::Material>::Ptr>
     cyclus::Composition::Ptr feed_comp = FeedComp();
     cyclus::Converter<Material>::Ptr swu_converter(
         new SwuConverter(feed_comp, tails_assay, gamma_235, enrichment_process,
-                         use_downblending, use_integer_stages));
+                         use_downblending, use_integer_stages,
+                         n_init_enriching, n_init_stripping));
     cyclus::Converter<Material>::Ptr feed_converter(
         new FeedConverter(feed_comp, tails_assay, gamma_235,
                           enrichment_process,
-                          use_downblending, use_integer_stages));
+                          use_downblending, use_integer_stages,
+                          n_init_enriching, n_init_stripping));
     CapacityConstraint<Material> swu_constraint(swu_capacity,
                                                 swu_converter);
     CapacityConstraint<Material> feed_constraint(
@@ -252,7 +257,8 @@ cyclus::Material::Ptr MIsoEnrich::Offer_(
   EnrichmentCalculator e(feed_cm, product_assay,
                          tails_assay, gamma_235,
                          enrichment_process, feed_qty, product_qty,
-                         swu_capacity, use_downblending, use_integer_stages);
+                         swu_capacity, use_downblending, use_integer_stages,
+                         n_init_enriching, n_init_stripping);
   e.ProductOutput(product_cm, product_qty);
 
   Composition::Ptr product_comp = Composition::CreateFromAtom(product_cm);
@@ -421,8 +427,8 @@ cyclus::Material::Ptr MIsoEnrich::Enrich_(
     EnrichmentCalculator e(feed_cm, product_assay,
                            tails_assay, gamma_235, enrichment_process,
                            feed_qty, request_qty,
-                           swu_capacity, use_downblending, use_integer_stages);
-                           //n_init_enriching, n_init_stripping);
+                           swu_capacity, use_downblending, use_integer_stages,
+                           n_init_enriching, n_init_stripping);
     e.EnrichmentOutput(product_cm, tails_cm, feed_required, swu_required,
                        product_qty, tails_qty, n_enriching, n_stripping);
   } catch (cyclus::Error& err) {
@@ -433,6 +439,10 @@ cyclus::Material::Ptr MIsoEnrich::Enrich_(
               << "Enrichment calculator msg:\n" << err.what();
 
     throw cyclus::ValueError(ss.str());
+  }
+  if (update_n_init_stages) {
+    n_init_enriching = n_enriching;
+    n_init_stripping = n_stripping;
   }
   // Now, perform the enrichment by popping the feed and converting it to
   // product and tails.
@@ -460,8 +470,7 @@ cyclus::Material::Ptr MIsoEnrich::Enrich_(
   current_swu_capacity -= swu_required;
   intra_timestep_swu += swu_required;
   intra_timestep_feed += feed_required;
-  RecordEnrichment_(feed_required, swu_required);
-  //RecordEnrichment_(feed_required, swu_required, n_enriching, n_stripping);
+  RecordEnrichment_(feed_required, swu_required, n_enriching, n_stripping);
 
   LOG(cyclus::LEV_INFO5, "MIsoEn") << prototype()
                                    << " has performed an enrichment: ";
@@ -507,7 +516,9 @@ cyclus::Composition::Ptr MIsoEnrich::FeedComp() {
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void MIsoEnrich::RecordEnrichment_(
     double feed_qty,
-    double swu) {
+    double swu,
+    double n_enriching,
+    double n_stripping) {
   LOG(cyclus::LEV_DEBUG1, "MIsoEn") << prototype()
                                     << " has enriched a material:";
   LOG(cyclus::LEV_DEBUG1, "MIsoEn") << "  * Amount: " << feed_qty;
@@ -519,6 +530,8 @@ void MIsoEnrich::RecordEnrichment_(
      ->AddVal("Time", ctx->time())
      ->AddVal("feed_qty", feed_qty)
      ->AddVal("SWU", swu)
+     ->AddVal("n_enriching", n_enriching)
+     ->AddVal("n_stripping", n_stripping)
      ->Record();
 }
 

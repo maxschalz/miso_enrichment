@@ -16,10 +16,12 @@ class SwuConverter : public cyclus::Converter<cyclus::Material> {
  public:
   SwuConverter(cyclus::Composition::Ptr feed_comp, double tails_assay,
                double gamma_235, std::string enrichment_process,
-               bool use_downblending, bool use_integer_stages)
+               bool use_downblending, bool use_integer_stages,
+               double n_init_enriching, double n_init_stripping)
       : feed_comp_(feed_comp), gamma_235_(gamma_235),
         enrichment_process_(enrichment_process),
         tails_assay_(tails_assay), use_downblending(use_downblending),
+        n_init_enriching(n_init_enriching), n_init_stripping(n_init_stripping),
         use_integer_stages(use_integer_stages) {}
 
   virtual ~SwuConverter() {}
@@ -38,7 +40,8 @@ class SwuConverter : public cyclus::Converter<cyclus::Material> {
     EnrichmentCalculator e(feed_cm, product_assay, tails_assay_, gamma_235_,
                            enrichment_process_,
                            1e299, product_qty, 1e299, use_downblending,
-                           use_integer_stages);
+                           use_integer_stages, n_init_enriching,
+                           n_init_stripping);
     swu_used = e.SwuUsed();
 
     } catch (cyclus::Error& err) {
@@ -73,6 +76,8 @@ class SwuConverter : public cyclus::Converter<cyclus::Material> {
   double gamma_235_;
   std::string enrichment_process_;
   double tails_assay_;
+  double n_init_enriching;
+  double n_init_stripping;
 };
 
 class FeedConverter : public cyclus::Converter<cyclus::Material> {
@@ -80,10 +85,12 @@ class FeedConverter : public cyclus::Converter<cyclus::Material> {
   FeedConverter(cyclus::Composition::Ptr feed_comp, double tails_assay,
                 double gamma_235, std::string enrichment_process,
                 bool use_downblending,
-                bool use_integer_stages)
+                bool use_integer_stages,
+                double n_init_enriching, double n_init_stripping)
       : feed_comp_(feed_comp), gamma_235_(gamma_235),
         enrichment_process_(enrichment_process),
         tails_assay_(tails_assay), use_downblending(use_downblending),
+        n_init_enriching(n_init_enriching), n_init_stripping(n_init_stripping),
         use_integer_stages(use_integer_stages) {}
 
   virtual ~FeedConverter() {}
@@ -101,7 +108,8 @@ class FeedConverter : public cyclus::Converter<cyclus::Material> {
       EnrichmentCalculator e(feed_cm, product_assay, tails_assay_, gamma_235_,
                              enrichment_process_,
                              1e299, product_qty, 1e299, use_downblending,
-                             use_integer_stages);
+                             use_integer_stages, n_init_enriching,
+                             n_init_stripping);
       feed_used = e.FeedUsed();
     } catch (cyclus::Error& err) {
       std::stringstream ss;
@@ -144,6 +152,8 @@ class FeedConverter : public cyclus::Converter<cyclus::Material> {
   double gamma_235_;
   std::string enrichment_process_;
   double tails_assay_;
+  double n_init_enriching;
+  double n_init_stripping;
 };
 
 /// @class MIsoEnrich
@@ -213,7 +223,7 @@ class MIsoEnrich : public cyclus::Facility,
   bool ValidReq_(const cyclus::Material::Ptr& mat);
 
   ///  @brief records and enrichment with the cyclus::Recorder
-  void RecordEnrichment_(double feed_qty, double swu);
+  void RecordEnrichment_(double feed_qty, double swu, double n_enriching, double n_stripping);
 
   /// Records an agent's latitude and longitude to the output db
   void RecordPosition();
@@ -396,6 +406,33 @@ class MIsoEnrich : public cyclus::Facility,
            "the desired product and tails assays are obtained."  \
   }
   bool use_integer_stages;
+
+  #pragma cyclus var {  \
+    "default": -1,  \
+    "doc": "The number of stages are determined in an optimisation process. " \
+           "The value indicated here is the initial value of the number of " \
+           "stages in the enriching section, passed to the optimisation." \
+           "Setting this number to an appropriate value can facilitate " \
+           "convergence of the algorithm." \
+  }
+  double n_init_enriching;
+
+  #pragma cyclus var {  \
+    "default": -1,  \
+    "doc": "The number of stages are determined in an optimisation process. " \
+           "The value indicated here is the initial value of the number of " \
+           "stages in the stripping section, passed to the optimisation." \
+           "Setting this number to an appropriate value can facilitate " \
+           "convergence of the algorithm." \
+  }
+  double n_init_stripping;
+
+  #pragma cyclus var {  \
+    "default": 1,  \
+    "doc": "Update n_init_enriching and n_init_stripping during the " \
+           "simulation using the values from successful calculations." \
+  }
+  bool update_n_init_stages;
 };
 
 }  // namespace misoenrichment

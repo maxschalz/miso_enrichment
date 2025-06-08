@@ -26,7 +26,8 @@ class EnrichmentCalculator {
                        std::string enrichment_process,
                        double feed_qty, double product_qty,
                        double max_swu, bool use_downblending=true,
-                       bool use_integer_stages=true);
+                       bool use_integer_stages=true,
+                       double n_init_enriching=-1, double n_init_stripping=-1);
   EnrichmentCalculator(const EnrichmentCalculator& e);
   EnrichmentCalculator& operator= (const EnrichmentCalculator& e);
 
@@ -79,6 +80,8 @@ class EnrichmentCalculator {
   // Number of stages in the enriching and in the stripping section
   double n_enriching;
   double n_stripping;
+  double n_init_enriching;
+  double n_init_stripping;
 
   double gamma_235;  // The overall separation factor for U-235
 
