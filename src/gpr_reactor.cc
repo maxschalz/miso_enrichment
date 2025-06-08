@@ -64,11 +64,13 @@ GprReactor::GprReactor(cyclus::Context* ctx)
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-uint64_t GprReactor::GetUid_() {
+std::string GprReactor::GetUid_() {
   std::chrono::time_point<std::chrono::system_clock> now =
       std::chrono::system_clock::now();
   uint64_t ticks = (uint64_t) now.time_since_epoch().count();
-  return ticks;
+  std::stringstream ss;
+  ss << id() << ticks;
+  return ss.str();
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

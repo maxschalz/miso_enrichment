@@ -271,7 +271,7 @@ class GprReactor : public cyclus::Facility, public cyclus::toolkit::Position  {
 
   // This variable stores a constant unique identifier (the time since epoch in
   // ns upon instantiation) and is used when storing the JSON files.
-  const uint64_t uid_fname;
+  const std::string uid_fname;
 
   // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   // Coordinates
@@ -314,7 +314,7 @@ class GprReactor : public cyclus::Facility, public cyclus::toolkit::Position  {
   void Transmute_();
   void Transmute_(int n_assem);
 
-  static uint64_t GetUid_();
+  std::string GetUid_();
 };
 
 }  // namespace misoenrichment
