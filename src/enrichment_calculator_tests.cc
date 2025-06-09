@@ -144,9 +144,8 @@ TEST_F(EnrichmentCalculatorTest, AssignmentOperator) {
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 TEST_F(EnrichmentCalculatorTest, Concentrations) {
-  EXPECT_TRUE(misotest::CompareCompMap(expect_product_comp,
-                                        product_cm));
-  EXPECT_TRUE(misotest::CompareCompMap(expect_tails_comp, tails_cm));
+  EXPECT_TRUE(misotest::CompareCompMap(product_comp, expect_product_comp));
+  EXPECT_TRUE(misotest::CompareCompMap(tails_comp, expect_tails_comp));
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -217,13 +216,14 @@ TEST_F(EnrichmentCalculatorTest, NonIntegerStagesNumbers) {
 
   cyclus::CompMap pc, tc;
   cyclus::CompMap expected_product_comp, expected_tails_comp;
-  expected_product_comp[922340000] = 0.00772031;
-  expected_product_comp[922350000] = 0.900002;
-  expected_product_comp[922380000] = 0.09227769;
 
-  expected_tails_comp[922340000] = 2.54688424e-06;
-  expected_tails_comp[922350000] = 1.00001000e-03;
-  expected_tails_comp[922380000] = 9.98997443e-01;
+  expected_product_comp[922340000] = 0.007720;
+  expected_product_comp[922350000] = 0.9;
+  expected_product_comp[922380000] = 0.092280;
+
+  expected_tails_comp[922340000] = 0.000002547;
+  expected_tails_comp[922350000] = 0.001;
+  expected_tails_comp[922380000] = 0.998997453;
 
   EnrichmentCalculator e2(compmap_nat_U(), target_product_assay,
                           target_tails_assay, gamma, enrichment_process,

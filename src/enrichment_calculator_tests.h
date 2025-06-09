@@ -24,7 +24,6 @@ class EnrichmentCalculatorTest : public ::testing::Test {
 
   // Values to be calculated by EnrichmentCalculator
   cyclus::CompMap product_comp, tails_comp;
-  cyclus::CompMap product_cm, tails_cm;
   double feed_qty, product_qty, tails_qty, swu_used;
   double n_enriching, n_stripping;
 
