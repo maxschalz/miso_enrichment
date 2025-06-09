@@ -320,7 +320,7 @@ TEST_F(VarRecipeSourceTest, Response) {
   src_facility->GetMatlTrades(trades, responses);
   cyclus::CompMap third_comp = responses[0].second->comp()->atom();
   // Tick occured, the composition should change.
-  EXPECT_FALSE(misotest::CompareCompMap(first_comp, third_comp));
+  EXPECT_FALSE(misotest::CompareCompMap(first_comp, third_comp, false));
 
   delete request;
   delete bid;

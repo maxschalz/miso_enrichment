@@ -13,6 +13,7 @@ namespace misoenrichment {
 namespace misotest {
 
 bool CompareCompMap(cyclus::CompMap cm1, cyclus::CompMap cm2);
+bool CompareCompMap(cyclus::CompMap cm1, cyclus::CompMap cm2, bool expected_true);
 cyclus::Composition::Ptr comp_depletedU();
 cyclus::Composition::Ptr comp_natU();
 cyclus::Composition::Ptr comp_reprocessedU();

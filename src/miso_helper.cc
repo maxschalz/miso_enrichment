@@ -14,6 +14,14 @@ namespace misotest {
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 bool CompareCompMap(cyclus::CompMap cm1, cyclus::CompMap cm2) {
+  return CompareCompMap(cm1, cm2, true);
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// If this function is used in a EXPECT_FALSE test, then the 'expected_true'
+// argument can be set to false to prevent the STDOUT information being printed.
+bool CompareCompMap(cyclus::CompMap cm1, cyclus::CompMap cm2,
+    bool expected_true) {
   std::vector<int> isotopes(IsotopesNucID());
   std::vector<int>::iterator it;
   // The following for-loop has been added to ensure that the all of the
@@ -24,7 +32,7 @@ bool CompareCompMap(cyclus::CompMap cm1, cyclus::CompMap cm2) {
   }
 
   bool result = cyclus::compmath::AlmostEq(cm1, cm2, kEpsCompMap);
-  if (!result) {
+  if (!result && expected_true) {
     std::cout << "Value of: cm1\n"
               << "Actual:\n";
     cyclus::CompMap::iterator it;
