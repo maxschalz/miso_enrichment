@@ -9,7 +9,8 @@
 #include "error.h"
 
 #include "miso_helper.h"
-#include "../CppNumericalSolvers/include/cppoptlib/solver/bfgssolver.h"
+#include "../CppNumericalSolvers/include/cppoptlib/function.h"
+#include "../CppNumericalSolvers/include/cppoptlib/solver/nelder_mead.h"
 
 namespace misoenrichment {
 
@@ -277,27 +278,36 @@ void EnrichmentCalculator::CalculateDecimalStages_() {
   // between actual and desired uranium assay in product and tails gets
   // minimised.
   EnrichmentProblem problem(this);
-  cppoptlib::BfgsSolver<EnrichmentProblem> solver;
-  cppoptlib::Problem<double>::TVector staging(2);
-  const double minimization_threshold = 1e-5;
+  cppoptlib::solver::NelderMead<EnrichmentProblem> solver;
+  Eigen::Vector2d staging;
 
+  const double minimization_threshold = 1e-6;
   // If the user has defined initial values, first try using these.
+  double n_init_result;
   if (n_init_enriching > 0. && n_init_stripping > 0.) {
-    staging[0] = n_init_enriching;
     staging[1] = n_init_stripping;
-    solver.minimize(problem, staging);
+    // Create the initial state for the solver
+    auto initial_state = cppoptlib::function::FunctionState(staging);
+    auto [solution, solver_state] = solver.Minimize(problem, initial_state);
+    n_init_result = problem(solution.x);
+    PPrint();
 
+    // Final Status: solver_state.status
+    // Found minimum at: solution.x.transpose()
+    // Function value: f(solution.x)
+    // Final Status: solver_state.status
+    // Found minimum at: solution.x.transpose()
+    // Function value: f(solution.x)
     // If successful, calculate definitive concentrations and exit function.
-    if (problem.value(staging) < minimization_threshold) {
-      n_enriching = staging[0];
-      n_stripping = staging[1];
+    if (problem(solution.x) < minimization_threshold) {
+      n_enriching = (double)solution.x.transpose()[0];
+      n_stripping = (double)solution.x.transpose()[1];
       CalculateConcentrations_();
       return;
     }
   }
 
-  // If no user-defined or unsuccessful initial values, use iterative process
-  // with pre-set initial values.
+  // Pre-set initial values to help facilitate convergence.
   std::vector<double> n_init_stages;
   std::pair<double, double> bounds;
   bounds.first = 0;
@@ -310,6 +320,8 @@ void EnrichmentCalculator::CalculateDecimalStages_() {
     n_init_stages.assign(initial, initial + 4);
     bounds.second = 10000;
   }
+
+  // Run iterative process with pre-set initial values.
   bool found_solution = false;
   double current_minimization;
   double best_minimization = 100;  // Only relevant for error msg
@@ -318,8 +330,9 @@ void EnrichmentCalculator::CalculateDecimalStages_() {
     for (double n_init_str : n_init_stages) {
       staging[0] = n_init_enr;
       staging[1] = n_init_str;
-      solver.minimize(problem, staging);
-      current_minimization = problem.value(staging);
+      auto initial_state = cppoptlib::function::FunctionState(staging);
+      auto [solution, solver_state] = solver.Minimize(problem, initial_state);
+      current_minimization = problem(solution.x);
 
       // The two latter conditions are rough sanity checks to ensure that no
       // non-sensical solution is used. Maybe this will be replaced later by a
@@ -330,6 +343,10 @@ void EnrichmentCalculator::CalculateDecimalStages_() {
           && bounds.first < staging[1] && staging[1] < bounds.second
       ) {
         found_solution = true;
+        // Use result to calculate the definitive concentrations.
+        n_enriching = (double)solution.x.transpose()[0];
+        n_stripping = (double)solution.x.transpose()[1];
+        CalculateConcentrations_();
         break;
       }
       if (current_minimization < best_minimization) {
@@ -342,21 +359,26 @@ void EnrichmentCalculator::CalculateDecimalStages_() {
     }
   }
   if (!found_solution) {
-    n_enriching = best_n_init.first;
-    n_stripping = best_n_init.second;
+    staging[0] = best_n_init.first;
+    staging[1] = best_n_init.second;
+    auto initial_state = cppoptlib::function::FunctionState(staging);
+    auto [solution, solver_state] = solver.Minimize(problem, initial_state);
+    n_enriching = (double)solution.x.transpose()[0];
+    n_stripping = (double)solution.x.transpose()[1];
+
     CalculateConcentrations_();
     PPrint();
     std::stringstream err_msg;
     err_msg << "Did not manage to determine the correct staging! "
-            << "Best optimization yielded " << best_minimization
+            << "Best optimization yielded " << problem(solution.x)
             << " which is larger than the threshold value of "
-            << minimization_threshold;
+            << minimization_threshold
+            << ". This optimisation used the staging "
+            << n_enriching << ", " << n_stripping
+            << ". Initial user values were " << n_init_enriching << ", "
+            << n_init_stripping << ", and yielded " << n_init_result;
     throw cyclus::Error(err_msg.str());
   }
-  // Use result to calculate the definitive concentrations.
-  n_enriching = staging[0];
-  n_stripping = staging[1];
-  CalculateConcentrations_();
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -563,23 +585,6 @@ void EnrichmentCalculator::CalculateSums(double& sum_e, double& sum_s) {
     sum_e += e * atom_frac / (e+s);  // right-hand side of Eq. (47)
     sum_s += s * atom_frac / (e+s);  // right-hand side of Eq. (50)
   }
-}
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-EnrichmentProblem::EnrichmentProblem(EnrichmentCalculator* c) :
-  calculator(c) {}
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-double EnrichmentProblem::value(const cppoptlib::Problem<double>::TVector &staging) {
-  calculator->n_enriching = staging[0];
-  calculator->n_stripping = staging[1];
-  calculator->CalculateConcentrations_();
-
-  double target_p = calculator->target_product_assay;
-  double target_t = calculator->target_tails_assay;
-
-  return pow((calculator->product_composition[922350000] - target_p) / target_p, 2)
-         + pow((calculator->tails_composition[922350000] - target_t) / target_t, 2);
 }
 
 }  // namespace misoenrichment

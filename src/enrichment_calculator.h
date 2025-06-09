@@ -7,7 +7,7 @@
 
 #include <gtest/gtest.h>
 
-#include "include/cppoptlib/problem.h"  // from external/CppNumericalSolvers
+#include "include/cppoptlib/function.h"  // from external/CppNumericalSolvers
 #include "composition.h"
 
 class EnrichmentProblem;
@@ -97,15 +97,37 @@ class EnrichmentCalculator {
   double ValueFunction_(const cyclus::CompMap& composition);
 };
 
-class EnrichmentProblem : public cppoptlib::Problem<double> {
+
+class EnrichmentProblem
+  : public cppoptlib::function::FunctionCRTP<
+        EnrichmentProblem,
+        double,
+        cppoptlib::function::DifferentiabilityMode::None,
+        2> {
  public:
-  EnrichmentProblem(EnrichmentCalculator*);
+  //EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+  EnrichmentProblem(EnrichmentCalculator* c) : calculator(c) {}
 
   // Function to be minimised (must *not* be renamed).
   // Calculates the relative difference between actual and desired uranium
   // assay for an enrichment process with a given staging; for both product and
   // tails output.
-  double value(const cppoptlib::Problem<double>::TVector &staging);
+  //
+  // I do not manage to imnplement the function in the source file, if I do I
+  // keep getting the following error: 'ScalarType' in namespace 'cppoptlib'
+  // does not name a type.
+  ScalarType operator()(const VectorType &staging) const {
+    calculator->n_enriching = staging(0);
+    calculator->n_stripping = staging(1);
+    calculator->CalculateConcentrations_();
+
+    double target_p = calculator->target_product_assay;
+    double target_t = calculator->target_tails_assay;
+
+    return pow((calculator->product_composition[922350000] - target_p) / target_p, 2)
+           + pow((calculator->tails_composition[922350000] - target_t) / target_t, 2);
+  }
 
  private:
   EnrichmentCalculator* calculator;
