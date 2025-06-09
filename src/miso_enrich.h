@@ -336,8 +336,7 @@ class MIsoEnrich : public cyclus::Facility,
   double intra_timestep_swu;
   double intra_timestep_feed;
 
-  // TODO think about how to include these variables in preprocessor
-  #pragma cyclus var {}
+  #pragma cyclus var { 'capacity': 'max_feed_inventory' }
   cyclus::toolkit::ResBuf<cyclus::Material> feed_inv;
 
   #pragma cyclus var {}

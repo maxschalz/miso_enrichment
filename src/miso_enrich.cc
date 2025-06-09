@@ -62,6 +62,7 @@ void MIsoEnrich::EnterNotify() {
                                          swu_capacity_times);
   }
 
+  feed_inv.capacity(max_feed_inventory);
   if (initial_feed > 0) {
     Material::Ptr mat = Material::Create(
         this, initial_feed, context()->GetRecipe(feed_recipe));
