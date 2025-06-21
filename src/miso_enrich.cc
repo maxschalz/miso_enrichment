@@ -25,6 +25,7 @@ MIsoEnrich::MIsoEnrich(cyclus::Context* ctx)
       product_commod(""),
       tails_commod(""),
       order_prefs(true),
+      explicit_feed_commod_pref(0.),
       swu_capacity(1e299),
       intra_timestep_swu(0),
       intra_timestep_feed(0),
@@ -55,6 +56,11 @@ void MIsoEnrich::EnterNotify() {
 
   cyclus::Facility::EnterNotify();
 
+  if (order_prefs && explicit_feed_commod_pref != 0.) {
+    throw cyclus::ValueError(
+      "Cannot use 'order_prefs' and 'explicit_feed_commod_pref' at the same time."
+    );
+  }
   if (swu_capacity_times[0]==-1) {
     swu_flexible = FlexibleInput<double>(this, swu_capacity_vals);
   } else {
@@ -137,7 +143,11 @@ MIsoEnrich::GetMatlRequests() {
 
   if (mat->quantity() > cyclus::eps_rsrc()) {
     //TODO use multiple feed commodities?
-    port->AddRequest(mat, this, feed_commod);
+    if (explicit_feed_commod_pref != 0) {
+      port->AddRequest(mat, this, feed_commod, explicit_feed_commod_pref);
+    } else {
+      port->AddRequest(mat, this, feed_commod);
+    }
     ports.insert(port);
   }
   return ports;
@@ -327,7 +337,6 @@ void MIsoEnrich::AdjustMatlPrefs(
       (reqit->second)[bids_vector[bid_i]] = new_pref;
     }  // each bid
   }  // each material request
-
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

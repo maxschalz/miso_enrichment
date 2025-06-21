@@ -316,6 +316,15 @@ class MIsoEnrich : public cyclus::Facility,
   bool order_prefs;
 
   #pragma cyclus var { \
+    "default": 0., \
+    "tooltip": "explicitly specified preference assigned to request", \
+    "uilabel": "explicitly specified preference assigned to request", \
+    "doc": "explictitly specified preference assigned to request. Cannot be " \
+           "set in conjunction with 'order_prefs == true'" \
+  }
+  double explicit_feed_commod_pref;
+
+  #pragma cyclus var { \
     "default": 1.4, \
     "tooltip": "Separation factor U235", \
     "uilabel": "Separation factor for U235", \
