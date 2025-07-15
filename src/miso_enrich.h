@@ -4,157 +4,16 @@
 #include <string>
 #include <vector>
 
+#include <nlohmann/json_fwd.hpp>
+
 #include "cyclus.h"
 
-#include "enrichment_calculator.h"
+#include "python_enrichment.h"
 #include "flexible_input.cc"
 #include "miso_helper.h"
 
+
 namespace misoenrichment {
-
-class SwuConverter : public cyclus::Converter<cyclus::Material> {
- public:
-  SwuConverter(cyclus::Composition::Ptr feed_comp, double tails_assay,
-               double gamma_235, std::string enrichment_process,
-               bool use_downblending, bool use_integer_stages,
-               double n_init_enriching, double n_init_stripping)
-      : feed_comp_(feed_comp), gamma_235_(gamma_235),
-        enrichment_process_(enrichment_process),
-        tails_assay_(tails_assay), use_downblending(use_downblending),
-        n_init_enriching(n_init_enriching), n_init_stripping(n_init_stripping),
-        use_integer_stages(use_integer_stages) {}
-
-  virtual ~SwuConverter() {}
-
-  virtual double convert(
-      cyclus::Material::Ptr m, cyclus::Arc const * a = NULL,
-      cyclus::ExchangeTranslationContext<cyclus::Material>
-          const * ctx = NULL) const {
-
-    double product_qty = m->quantity();
-    double product_assay = MIsoAtomAssay(m);
-    cyclus::CompMap feed_cm = feed_comp_->atom();
-
-    double swu_used;
-    try {
-    EnrichmentCalculator e(feed_cm, product_assay, tails_assay_, gamma_235_,
-                           enrichment_process_,
-                           1e299, product_qty, 1e299, use_downblending,
-                           use_integer_stages, n_init_enriching,
-                           n_init_stripping);
-    swu_used = e.SwuUsed();
-
-    } catch (cyclus::Error& err) {
-      std::stringstream ss;
-      ss << "SWU converter " << " with feed " << " containing " 
-                << MIsoAtomAssay(feed_comp_) << " percent 235. Request for " << product_qty
-                << " of " << product_assay << " percent enriched material.\n"
-                << "Enrichment calculator msg:\n" << err.what();
-
-      throw cyclus::ValueError(ss.str());
-    }
-
-    return swu_used;
-  }
-
-  virtual bool operator==(Converter& other) const {
-    SwuConverter* cast = dynamic_cast<SwuConverter*>(&other);
-
-    bool cast_not_null = cast != NULL;
-    bool feed_eq = cyclus::compmath::AlmostEq(feed_comp_->atom(),
-                                              cast->feed_comp_->atom(),
-                                              kEpsCompMap);
-    bool tails_eq = tails_assay_ == cast->tails_assay_;
-
-    return cast != NULL && feed_eq && tails_eq;
-  }
-
- private:
-  bool use_downblending;
-  bool use_integer_stages;
-  cyclus::Composition::Ptr feed_comp_;
-  double gamma_235_;
-  std::string enrichment_process_;
-  double tails_assay_;
-  double n_init_enriching;
-  double n_init_stripping;
-};
-
-class FeedConverter : public cyclus::Converter<cyclus::Material> {
- public:
-  FeedConverter(cyclus::Composition::Ptr feed_comp, double tails_assay,
-                double gamma_235, std::string enrichment_process,
-                bool use_downblending,
-                bool use_integer_stages,
-                double n_init_enriching, double n_init_stripping)
-      : feed_comp_(feed_comp), gamma_235_(gamma_235),
-        enrichment_process_(enrichment_process),
-        tails_assay_(tails_assay), use_downblending(use_downblending),
-        n_init_enriching(n_init_enriching), n_init_stripping(n_init_stripping),
-        use_integer_stages(use_integer_stages) {}
-
-  virtual ~FeedConverter() {}
-
-  virtual double convert(
-      cyclus::Material::Ptr m, cyclus::Arc const * a = NULL,
-      cyclus::ExchangeTranslationContext<cyclus::Material>
-          const * ctx = NULL) const {
-
-    double product_qty = m->quantity();
-    double product_assay = MIsoAtomAssay(m);
-    cyclus::CompMap feed_cm = feed_comp_->atom();
-    double feed_used;
-    try {
-      EnrichmentCalculator e(feed_cm, product_assay, tails_assay_, gamma_235_,
-                             enrichment_process_,
-                             1e299, product_qty, 1e299, use_downblending,
-                             use_integer_stages, n_init_enriching,
-                             n_init_stripping);
-      feed_used = e.FeedUsed();
-    } catch (cyclus::Error& err) {
-      std::stringstream ss;
-      ss << "Feed converter " << " with feed " << " containing " 
-                << MIsoAtomAssay(feed_comp_) << " percent 235. precise composition:\n";
-      for (auto const& x : feed_cm) {
-        ss << x.first << ": " << x.second << "\n";
-      }
-      ss << "Request for " << product_qty
-                << " of " << product_assay << " percent enriched material.\n"
-                << "Enrichment calculator msg:\n" << err.what();
-
-      throw cyclus::ValueError(ss.str());
-    }
-
-    cyclus::toolkit::MatQuery mq(m);
-    std::vector<int> isotopes(IsotopesNucID());
-    std::set<int> nucs(isotopes.begin(), isotopes.end());
-    double feed_uranium_frac = mq.atom_frac(nucs);
-
-    return feed_used / feed_uranium_frac;
-  }
-
-  virtual bool operator==(Converter& other) const {
-    FeedConverter* cast = dynamic_cast<FeedConverter*>(&other);
-
-    bool cast_not_null = cast != NULL;
-    bool feed_eq = cyclus::compmath::AlmostEq(feed_comp_->atom(),
-                                              cast->feed_comp_->atom(),
-                                              kEpsCompMap);
-    bool tails_eq = tails_assay_ == cast->tails_assay_;
-
-    return cast != NULL && feed_eq && tails_eq;
-  }
-
- private:
-  bool use_downblending;
-  bool use_integer_stages;
-  cyclus::Composition::Ptr feed_comp_;
-  double gamma_235_;
-  std::string enrichment_process_;
-  double tails_assay_;
-  double n_init_enriching;
-  double n_init_stripping;
-};
 
 /// @class MIsoEnrich
 ///
@@ -441,6 +300,9 @@ class MIsoEnrich : public cyclus::Facility,
            "simulation using the values from successful calculations." \
   }
   bool update_n_init_stages;
+
+  PythonEnrichment python_enrichment;
+  std::string uid;
 };
 
 }  // namespace misoenrichment

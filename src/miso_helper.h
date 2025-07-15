@@ -8,6 +8,8 @@
 #include "composition.h"
 #include "material.h"
 
+#include <nlohmann/json_fwd.hpp>
+
 namespace misoenrichment {
 
 namespace misotest {
@@ -63,6 +65,15 @@ double MIsoFrac(cyclus::CompMap compmap, int isotope);
 // DOI: 10.1080/08929880802361796
 std::map<int,double> CalculateSeparationFactor(double gamma_235,
                                                std::string enrichment_process);
+
+// Create a CompMap from a JSON file. 'key' must be "feed_composition",
+// "product_composition" or "tails_composition".
+cyclus::CompMap AtomCompMapFromJson(nlohmann::json obj, std::string key);
+
+// Create a unique identifier based on the system time and on prefix and suffix
+// provided by the user. The string will have the form
+// 'prefix_{SYSTEMTIME}_suffix'.
+std::string CreateUid(std::string prefix, std::string suffix);
 
 }  // namespace misoenrichment
 

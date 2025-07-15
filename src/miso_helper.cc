@@ -1,12 +1,15 @@
 #include "miso_helper.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <iterator>
 #include <sstream>
 
 #include "comp_math.h"
 #include "error.h"
+
+#include <nlohmann/json.hpp>
 
 namespace misoenrichment {
 
@@ -264,6 +267,43 @@ std::map<int,double> CalculateSeparationFactor(double gamma_235,
     throw cyclus::ValueError(ss.str());
   }
   return separation_factors;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+cyclus::CompMap AtomCompMapFromJson(nlohmann::json obj, std::string key) {
+  cyclus::CompMap cm;
+  int nuclide;
+  double fraction;
+  // Iterate over all nuclides in json object.
+  for (const auto& composition : obj[key].items()) {
+    try {
+      nuclide = pyne::nucname::id(composition.key());
+      fraction = composition.value();
+    } catch (const nlohmann::detail::out_of_range& e) {
+      continue;
+    }
+    if (fraction > cyclus::eps()) {
+      cm[nuclide] = fraction;
+    }
+  }
+  cyclus::compmath::Normalize(&cm);
+  return cm;
+}
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+std::string CreateUid(std::string prefix, std::string suffix) {
+  std::chrono::time_point<std::chrono::system_clock> now =
+      std::chrono::system_clock::now();
+  uint64_t ticks = (uint64_t) now.time_since_epoch().count();
+  std::stringstream ss;
+  if (!prefix.empty()) {
+    ss << prefix << "_";
+  }
+  ss << ticks;
+  if (!suffix.empty()) {
+    ss << "_" << suffix;
+  }
+  return ss.str();
 }
 
 } // namespace misoenrichment

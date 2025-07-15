@@ -1,6 +1,5 @@
 #include "miso_enrich.h"
 
-#include <algorithm>
 #include <cmath>
 #include <iterator>
 #include <map>
@@ -9,7 +8,10 @@
 
 #include "toolkit/timeseries.h"
 
+#include "converters.h"
 #include "miso_helper.h"
+
+#include <nlohmann/json.hpp>
 
 namespace misoenrichment {
 
@@ -36,7 +38,11 @@ MIsoEnrich::MIsoEnrich(cyclus::Context* ctx)
       use_downblending(true),
       n_init_enriching(-1),
       n_init_stripping(-1),
-      update_n_init_stages(true) {}
+      update_n_init_stages(true) {
+
+  uid = CreateUid(std::to_string(id()), "");
+  python_enrichment = PythonEnrichment(uid);
+}
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 MIsoEnrich::~MIsoEnrich() {}
@@ -226,16 +232,14 @@ std::set<cyclus::BidPortfolio<cyclus::Material>::Ptr>
       }
     }
 
+    std::string id_as_str(std::to_string(id()));
     cyclus::Composition::Ptr feed_comp = FeedComp();
     cyclus::Converter<Material>::Ptr swu_converter(
-        new SwuConverter(feed_comp, tails_assay, gamma_235, enrichment_process,
-                         use_downblending, use_integer_stages,
-                         n_init_enriching, n_init_stripping));
+        new SwuConverter(
+            feed_comp, tails_assay, gamma_235, enrichment_process, id_as_str));
     cyclus::Converter<Material>::Ptr feed_converter(
-        new FeedConverter(feed_comp, tails_assay, gamma_235,
-                          enrichment_process,
-                          use_downblending, use_integer_stages,
-                          n_init_enriching, n_init_stripping));
+        new FeedConverter(
+            feed_comp, tails_assay, gamma_235, enrichment_process, id_as_str));
     CapacityConstraint<Material> swu_constraint(swu_capacity,
                                                 swu_converter);
     CapacityConstraint<Material> feed_constraint(
@@ -255,23 +259,28 @@ std::set<cyclus::BidPortfolio<cyclus::Material>::Ptr>
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-cyclus::Material::Ptr MIsoEnrich::Offer_(
-    cyclus::Material::Ptr mat) {
+cyclus::Material::Ptr MIsoEnrich::Offer_(cyclus::Material::Ptr mat) {
   using cyclus::Composition;
 
-  cyclus::CompMap product_cm;
   double feed_qty = feed_inv.quantity();
   double product_assay = MIsoAtomAssay(mat);
   double product_qty = mat->quantity();
 
   cyclus::CompMap feed_cm = FeedCompMap();
-  EnrichmentCalculator e(feed_cm, product_assay,
-                         tails_assay, gamma_235,
-                         enrichment_process, feed_qty, product_qty,
-                         swu_capacity, use_downblending, use_integer_stages,
-                         n_init_enriching, n_init_stripping);
-  e.ProductOutput(product_cm, product_qty);
+  nlohmann::json enrichment_results = python_enrichment.RunEnrichment(
+      feed_cm,
+      product_assay,
+      tails_assay,
+      swu_capacity,
+      gamma_235,
+      enrichment_process,
+      feed_qty,
+      product_qty
+  );
 
+  product_qty = enrichment_results["product_qty"];
+  cyclus::CompMap product_cm = AtomCompMapFromJson(enrichment_results,
+                                                   "product_composition");
   Composition::Ptr product_comp = Composition::CreateFromAtom(product_cm);
   return cyclus::Material::CreateUntracked(product_qty, product_comp);
 }
@@ -421,26 +430,19 @@ void MIsoEnrich::AddMat_(cyclus::Material::Ptr mat) {
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 cyclus::Material::Ptr MIsoEnrich::Enrich_(
     cyclus::Material::Ptr mat, double request_qty) {
+  using cyclus::Composition;
 
   cyclus::CompMap feed_cm = FeedCompMap();
-  cyclus::CompMap product_cm;
-  cyclus::CompMap tails_cm;
-  double feed_required, swu_required, product_qty, tails_qty;
-  double n_enriching, n_stripping;
-
   double feed_qty = feed_inv.quantity();
   double product_assay = MIsoAtomAssay(mat);
 
   // In the following line, the enrichment is calculated but it is not yet
   // performed!
+  nlohmann::json enrichment_results;
   try {
-    EnrichmentCalculator e(feed_cm, product_assay,
-                           tails_assay, gamma_235, enrichment_process,
-                           feed_qty, request_qty,
-                           swu_capacity, use_downblending, use_integer_stages,
-                           n_init_enriching, n_init_stripping);
-    e.EnrichmentOutput(product_cm, tails_cm, feed_required, swu_required,
-                       product_qty, tails_qty, n_enriching, n_stripping);
+    enrichment_results = python_enrichment.RunEnrichment(
+      feed_cm, product_assay, tails_assay, swu_capacity, gamma_235,
+      enrichment_process, feed_qty, request_qty);
   } catch (cyclus::Error& err) {
     std::stringstream ss;
     ss << "Agent " << id() << ", containing "
@@ -450,10 +452,15 @@ cyclus::Material::Ptr MIsoEnrich::Enrich_(
 
     throw cyclus::ValueError(ss.str());
   }
-  if (update_n_init_stages) {
-    n_init_enriching = n_enriching;
-    n_init_stripping = n_stripping;
-  }
+
+  double feed_required = enrichment_results["feed_qty"];
+  double product_qty = enrichment_results["product_qty"];
+  cyclus::CompMap product_cm = AtomCompMapFromJson(enrichment_results,
+                                                   "product_composition");
+  Composition::Ptr product_comp = Composition::CreateFromAtom(product_cm);
+  double swu_required = enrichment_results["swu"];
+  double n_enriching = enrichment_results["n_enriching"];
+  double n_stripping = enrichment_results["n_stripping"];
   // Now, perform the enrichment by popping the feed and converting it to
   // product and tails.
   cyclus::Material::Ptr pop_mat;
@@ -471,10 +478,8 @@ cyclus::Material::Ptr MIsoEnrich::Enrich_(
     throw cyclus::ValueError(cyclus::Agent::InformErrorMsg(ss.str()));
   }
 
-  cyclus::compmath::ApplyThreshold(&product_cm, cyclus::eps_rsrc());
-
-  cyclus::Composition::Ptr product_comp = cyclus::Composition::CreateFromAtom(product_cm);
-  cyclus::Material::Ptr response = pop_mat->ExtractComp(product_qty, product_comp, 1e-10);
+  cyclus::Material::Ptr response = pop_mat->ExtractComp(
+      product_qty, product_comp, 1e-10);
   tails_inv.Push(pop_mat);
 
   current_swu_capacity -= swu_required;
@@ -490,7 +495,7 @@ cyclus::Material::Ptr MIsoEnrich::Enrich_(
   LOG(cyclus::LEV_INFO5, "MIsoEn") << "   * Product Qty: " << product_qty;
   LOG(cyclus::LEV_INFO5, "MIsoEn") << "   * Product Assay (atomic frac): "
                                    << MIsoAtomAssay(response);
-  LOG(cyclus::LEV_INFO5, "MIsoEn") << "   * Tails Qty: " << tails_qty;
+  LOG(cyclus::LEV_INFO5, "MIsoEn") << "   * Tails Qty: " << pop_mat->quantity();
   LOG(cyclus::LEV_INFO5, "MIsoEn") << "   * Tails Assay (atomic frac): "
                                    << MIsoAtomAssay(pop_mat);
   LOG(cyclus::LEV_INFO5, "MIsoEn") << "   * SWU: " << swu_required;

@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "misoenrichment"
+authors = [{ name = "Max Schalz" }]
+version = "0.0.0"
+readme = "README.md"
+license = { text = "BSD-3-Clause" }
+description = "Calculate enrichment of a multi-component uranium mixture."
+
+[tool.setuptools]
+packages = ["misoenrichment"]

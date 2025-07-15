@@ -37,11 +37,13 @@ def install(args):
     root_dir = os.path.split(__file__)[0]
     makefile = os.path.join(args.build_dir, 'Makefile')
 
-    print("Installing Python (sub)module 'spentfuelgpr'...")
-    spent_fuel_gpr_dir = os.path.join(root_dir, "spentfuelgpr")
-    # The line below follows https://stackoverflow.com/a/50255019/30370934
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-e", spent_fuel_gpr_dir])
-    print()
+    submodules = ("spentfuelgpr", "misoenrichment")
+    for submodule in submodules:
+        print(f"Installing Python (sub)module '{submodule}'...")
+        dir_ = os.path.join(root_dir, submodule)
+        # The line below follows https://stackoverflow.com/a/50255019/30370934
+        subprocess.check_call([sys.executable, "-m", "pip", "install", dir_])
+        print()
 
     if not os.path.exists(makefile):
         rtn = subprocess.call(['which', 'cmake'], shell=(os.name == 'nt'))

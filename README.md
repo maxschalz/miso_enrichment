@@ -13,7 +13,10 @@ streams composed of two or more uranium isotopes taking into account the
 different enrichment behaviour of minor isotopes such as <sup>234</sup>U (present in
 natural as well as in reprocessed uranium) or <sup>236</sup>U (present in
 reprocessed uranium from spent nuclear fuel). The tracking of minor
-isotopes makes this module suitable for nuclear archaeology, see, e.g., Ref 3.
+isotopes makes this module suitable for nuclear archaeology, see, e.g., Ref 3.  
+:rotating-light: __Please note__: Some functions, such as `use_integer_stages`
+and `use_downblending` do not work on this branch, which only implements a
+hotfix to [issue #19](https://github.com/Nuclear-Verification-and-Disarmament/miso_enrichment/issues/19).
 
 `GprReactor` is a Cyclus reactor facility that uses Gaussian Process
 Regression (GPR) to calculate the composition of the irradiated fuel depending

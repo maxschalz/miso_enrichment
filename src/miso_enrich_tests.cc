@@ -44,12 +44,12 @@ void MIsoEnrichTest::TearDown() {
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void MIsoEnrichTest::InitParameters() {
   cyclus::CompMap cm;
-  double feed_assay = 0.711;
-  double feed_U234 = 5.5e-3;
+  double feed_assay = 0.7204;
+  double feed_U234 = 5.4e-3;
   cm[922340000] = feed_U234;
   cm[922350000] = feed_assay;
   cm[922380000] = 100 - feed_assay - feed_U234;
-  recipe = cyclus::Composition::CreateFromMass(cm);
+  recipe = cyclus::Composition::CreateFromAtom(cm);
   feed_recipe = "feed_recipe";
   fake_sim->AddRecipe(feed_recipe, recipe);
 
@@ -157,6 +157,11 @@ TEST_F(MIsoEnrichTest, BidPrefs) {
 TEST_F(MIsoEnrichTest, FeedConstraint) {
   // Check that the feed constraint is evaluated correctly. Only 100 kg of
   // feed are at the disposal but the sink requests infinity kg of product.
+  cyclus::CompMap cm;
+  cm[922350000] = 0.9;
+  cm[922380000] = 0.1;
+  cyclus::Composition::Ptr wgu = cyclus::Composition::CreateFromAtom(cm);
+
   std::string config =
     "   <feed_commod>feed_U</feed_commod> "
     "   <feed_recipe>feed_recipe</feed_recipe> "
@@ -164,17 +169,17 @@ TEST_F(MIsoEnrichTest, FeedConstraint) {
     "   <product_commod>enriched_U</product_commod> "
     "   <tails_commod>depleted_U</tails_commod> "
     "   <tails_assay>0.002</tails_assay> "
-    "   <enrichment_process>centrifuge</enrichment_process> "
+    "   <enrichment_process>diffusion</enrichment_process> "
     "   <swu_capacity_times><val>0</val></swu_capacity_times> "
     "   <swu_capacity_vals><val>10000</val></swu_capacity_vals> "
     "   <use_downblending>0</use_downblending> "
-    "   <use_integer_stages>1</use_integer_stages> ";
+    "   <use_integer_stages>0</use_integer_stages> ";
 
   int simdur = 1;
   cyclus::MockSim sim(cyclus::AgentSpec(":misoenrichment:MIsoEnrich"),
                       config, simdur);
   sim.AddRecipe(feed_recipe, recipe);
-  sim.AddRecipe("enriched_U_recipe", misotest::comp_weapongradeU());
+  sim.AddRecipe("enriched_U_recipe", wgu);
   sim.AddSink("enriched_U").recipe("enriched_U_recipe")
                            .Finalize();
   int id = sim.Run();
@@ -184,8 +189,9 @@ TEST_F(MIsoEnrichTest, FeedConstraint) {
   QueryResult qr = sim.db().Query("Transactions", &conds);
   Material::Ptr m = sim.GetMaterial(qr.GetVal<int>("ResourceId"));
 
+  double expected_product = 0.57951002;
   EXPECT_EQ(qr.rows.size(), 1);
-  EXPECT_NEAR(m->quantity(),0.5754, 1e-4);
+  EXPECT_NEAR(m->quantity(), expected_product, 1e-6);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -362,6 +368,11 @@ TEST_F(MIsoEnrichTest, RequestSim) {
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 TEST_F(MIsoEnrichTest, TailsTrade) {
+  cyclus::CompMap cm;
+  cm[922350000] = 0.9;
+  cm[922380000] = 0.1;
+  cyclus::Composition::Ptr wgu = cyclus::Composition::CreateFromAtom(cm);
+
   std::string config =
     "   <feed_commod>feed_U</feed_commod> "
     "   <feed_recipe>feed_recipe</feed_recipe> "
@@ -369,17 +380,17 @@ TEST_F(MIsoEnrichTest, TailsTrade) {
     "   <tails_commod>depleted_U</tails_commod> "
     "   <tails_assay>0.002</tails_assay> "
     "   <initial_feed>100</initial_feed> "
-    "   <enrichment_process>centrifuge</enrichment_process> "
+    "   <enrichment_process>diffusion</enrichment_process> "
     "   <swu_capacity_times><val>0</val></swu_capacity_times> "
     "   <swu_capacity_vals><val>10000</val></swu_capacity_vals> "
     "   <use_downblending>0</use_downblending> "
-    "   <use_integer_stages>1</use_integer_stages> ";
+    "   <use_integer_stages>0</use_integer_stages> ";
   int simdur = 2;
   cyclus::MockSim sim(cyclus::AgentSpec(":misoenrichment:MIsoEnrich"),
                       config, simdur);
   sim.AddRecipe(feed_recipe, recipe);
   sim.AddRecipe("depleted_U_recipe", misotest::comp_depletedU());
-  sim.AddRecipe("enriched_U_recipe", misotest::comp_weapongradeU());
+  sim.AddRecipe("enriched_U_recipe", wgu);
 
   sim.AddSink("enriched_U").recipe("enriched_U_recipe")
                            .Finalize();
@@ -394,8 +405,9 @@ TEST_F(MIsoEnrichTest, TailsTrade) {
   cyclus::Material::Ptr mat = sim.GetMaterial(
       qr.GetVal<int>("ResourceId"));
 
+  double expected_tails_qty = 99.420490;
   EXPECT_EQ(1, qr.rows.size());
-  EXPECT_NEAR(99.4246, mat->quantity(), 1e-4);
+  EXPECT_NEAR(mat->quantity(), expected_tails_qty, 1e-6);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
