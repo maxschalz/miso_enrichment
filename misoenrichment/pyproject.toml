@@ -9,6 +9,10 @@ version = "0.0.0"
 readme = "README.md"
 license = { text = "BSD-3-Clause" }
 description = "Calculate enrichment of a multi-component uranium mixture."
+dependencies = [
+  "numpy>=1.21",
+]
+
 
 [tool.setuptools]
 packages = ["misoenrichment"]

@@ -24,6 +24,7 @@ import json
 import warnings
 
 import numpy as np
+import numpy.typing as npt
 from scipy.optimize import minimize
 
 ALLOWED_NUCLIDES = [
@@ -176,7 +177,7 @@ class Multi_isotope:
         with open(fname, "w", encoding="utf-8") as file_handle:
             json.dump(out_data, file_handle)
 
-    def set_feed_composition(self, composition: dict[str, float] | np.ndarray[float]):
+    def set_feed_composition(self, composition: dict[str, float] | npt.NDArray[float]):
         """Set and normalise the feed composition in atom/mole fractions.
 
         The feed must contain U235 and U238, else a ValueError is raised.
@@ -273,7 +274,7 @@ class Multi_isotope:
 
         self.alpha_star = self.alpha / self.alpha[3] ** 0.5
 
-    def value_function(self, x: np.ndarray[float]) -> float:
+    def value_function(self, x: npt.NDArray[float]) -> float:
         """Calculate the value of a uranium stream with composition `x`.
 
         This assumes that U-235 is the matched and U-238 the key isotope, based on [3].
