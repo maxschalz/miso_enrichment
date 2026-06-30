@@ -56,8 +56,7 @@ def calculate_enrichment_from_file(fname, suppress_warnings=False):
 
 
 class Multi_isotope:
-    """
-    Calculate the enrichment of a multicomponent isotope uranium mixture.
+    """Calculate the enrichment of a multicomponent isotope uranium mixture.
 
     This class allows to calculate the enrichment parameters of a cascade of given
     shape taking into account U-232, U-233, U-234, U-235 and U-238.
@@ -76,8 +75,7 @@ class Multi_isotope:
         product_qty: float = np.inf,
         max_swu: float = np.inf,
     ):
-        """
-        Create a Multi_isotope object.
+        """Create a Multi_isotope object.
 
         Alternatively, it can also be instantiated directly from a JSON file
         """
@@ -178,7 +176,7 @@ class Multi_isotope:
             json.dump(out_data, file_handle)
 
     def set_feed_composition(self, composition: dict[str, float] | npt.NDArray[float]):
-        """Set and normalise the feed composition in atom/mole fractions.
+        """Set and normalise the feed composition in mass fractions.
 
         The feed must contain U235 and U238, else a ValueError is raised.
         """
@@ -222,7 +220,7 @@ class Multi_isotope:
         self.xf /= self.xf.sum()
 
     def set_product_enrichment(self, xp: float):
-        """Set the desired enrichment level of the U235 product in atom fractions."""
+        """Set the desired enrichment level of the U235 product in mass fractions."""
         if xp < 0 or xp > 1.0 or xp <= self.xf[3]:
             msg = (
                 "Target product enrichment has to be in the range (0, 1) and it must "
@@ -234,7 +232,7 @@ class Multi_isotope:
         self.uptodate = False
 
     def set_tails_enrichment(self, xt: float):
-        """Set the desired enrichment level of the U235 tails in atom fractions."""
+        """Set the desired enrichment level of the U235 tails in mass fractions."""
         if xt < 0 or xt > 1.0:
             raise ValueError("Target tails enrichment has to be in the range (0, 1)!")
         if xt >= self.xf[3] and any(self.xf != 0.0):

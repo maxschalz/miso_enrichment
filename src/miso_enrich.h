@@ -121,10 +121,10 @@ class MIsoEnrich : public cyclus::Facility,
 
   #pragma cyclus var { \
     "default": 0.003, \
-    "tooltip": "tails assay (atom fraction)",	\
-    "uilabel": "Tails Assay (atom fraction)", \
+    "tooltip": "tails assay (mass fraction)",	\
+    "uilabel": "Tails Assay (mass fraction)", \
     "uitype": "range", \
-    "doc": "tails assay from the enrichment process as atom/mole fraction", \
+    "doc": "tails assay from the enrichment process as mass fraction", \
   }
   double tails_assay;
 
@@ -149,7 +149,7 @@ class MIsoEnrich : public cyclus::Facility,
   #pragma cyclus var { \
     "default": 1.0,	\
     "tooltip": "maximum allowed enrichment fraction", \
-    "doc": "maximum allowed atom/mole fraction of U235 in product", \
+    "doc": "maximum allowed mass fraction of U235 in product", \
     "uilabel": "Maximum Allowed Enrichment", \
     "uitype": "range", \
     "range": [0.0,1.0], \

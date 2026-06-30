@@ -68,7 +68,7 @@ std::map<int,double> CalculateSeparationFactor(double gamma_235,
 
 // Create a CompMap from a JSON file. 'key' must be "feed_composition",
 // "product_composition" or "tails_composition".
-cyclus::CompMap AtomCompMapFromJson(nlohmann::json obj, std::string key);
+cyclus::CompMap CompMapFromJson(nlohmann::json obj, std::string key);
 
 // Create a unique identifier based on the system time and on prefix and suffix
 // provided by the user. The string will have the form

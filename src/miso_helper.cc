@@ -270,7 +270,7 @@ std::map<int,double> CalculateSeparationFactor(double gamma_235,
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-cyclus::CompMap AtomCompMapFromJson(nlohmann::json obj, std::string key) {
+cyclus::CompMap CompMapFromJson(nlohmann::json obj, std::string key) {
   cyclus::CompMap cm;
   int nuclide;
   double fraction;

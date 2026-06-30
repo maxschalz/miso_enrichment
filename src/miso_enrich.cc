@@ -263,7 +263,7 @@ cyclus::Material::Ptr MIsoEnrich::Offer_(cyclus::Material::Ptr mat) {
   using cyclus::Composition;
 
   double feed_qty = feed_inv.quantity();
-  double product_assay = MIsoAtomAssay(mat);
+  double product_assay = MIsoMassAssay(mat);
   double product_qty = mat->quantity();
 
   cyclus::CompMap feed_cm = FeedCompMap();
@@ -279,16 +279,16 @@ cyclus::Material::Ptr MIsoEnrich::Offer_(cyclus::Material::Ptr mat) {
   );
 
   product_qty = enrichment_results["product_qty"];
-  cyclus::CompMap product_cm = AtomCompMapFromJson(enrichment_results,
-                                                   "product_composition");
-  Composition::Ptr product_comp = Composition::CreateFromAtom(product_cm);
+  cyclus::CompMap product_cm = CompMapFromJson(enrichment_results,
+                                               "product_composition");
+  Composition::Ptr product_comp = Composition::CreateFromMass(product_cm);
   return cyclus::Material::CreateUntracked(product_qty, product_comp);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 bool MIsoEnrich::ValidReq_(const cyclus::Material::Ptr& req_mat) {
-  double u_235 = MIsoAtomAssay(req_mat);
-  double u_238 = MIsoAtomFrac(req_mat, IsotopeToNucID(238));
+  double u_235 = MIsoMassAssay(req_mat);
+  double u_238 = MIsoMassFrac(req_mat, IsotopeToNucID(238));
 
   bool u_238_present = u_238 > 0;
   bool not_depleted = u_235 > tails_assay;
@@ -303,7 +303,7 @@ bool SortBids(cyclus::Bid<cyclus::Material>* i,
   cyclus::Material::Ptr mat_i = i->offer();
   cyclus::Material::Ptr mat_j = j->offer();
 
-  return MIsoAtomAssay(mat_i) <= MIsoAtomAssay(mat_j);
+  return MIsoMassAssay(mat_i) <= MIsoMassAssay(mat_j);
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -337,7 +337,7 @@ void MIsoEnrich::AdjustMatlPrefs(
 
       if (!u_235_mass) {
         cyclus::Material::Ptr mat = bids_vector[bid_i]->offer();
-        if (MIsoAtomAssay(mat) == 0.) {
+        if (MIsoMassAssay(mat) == 0.) {
           new_pref = -1;
         } else {
           u_235_mass = true;
@@ -410,7 +410,7 @@ void MIsoEnrich::AcceptMatlTrades(
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void MIsoEnrich::AddMat_(cyclus::Material::Ptr mat) {
-  cyclus::CompMap cm = mat->comp()->atom();
+  cyclus::CompMap cm = mat->comp()->mass();
   bool non_u_elem = false;
 
   cyclus::CompMap::const_iterator it;
@@ -424,8 +424,7 @@ void MIsoEnrich::AddMat_(cyclus::Material::Ptr mat) {
                                         "directly to tails.");
   }
   AddFeedMat_(mat);
-
-  }
+}
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 cyclus::Material::Ptr MIsoEnrich::Enrich_(
@@ -434,7 +433,7 @@ cyclus::Material::Ptr MIsoEnrich::Enrich_(
 
   cyclus::CompMap feed_cm = FeedCompMap();
   double feed_qty = feed_inv.quantity();
-  double product_assay = MIsoAtomAssay(mat);
+  double product_assay = MIsoMassAssay(mat);
 
   // In the following line, the enrichment is calculated but it is not yet
   // performed!
@@ -455,9 +454,9 @@ cyclus::Material::Ptr MIsoEnrich::Enrich_(
 
   double feed_required = enrichment_results["feed_qty"];
   double product_qty = enrichment_results["product_qty"];
-  cyclus::CompMap product_cm = AtomCompMapFromJson(enrichment_results,
-                                                   "product_composition");
-  Composition::Ptr product_comp = Composition::CreateFromAtom(product_cm);
+  cyclus::CompMap product_cm = CompMapFromJson(enrichment_results,
+                                               "product_composition");
+  Composition::Ptr product_comp = Composition::CreateFromMass(product_cm);
   double swu_required = enrichment_results["swu"];
   double n_enriching = enrichment_results["n_enriching"];
   double n_stripping = enrichment_results["n_stripping"];
@@ -479,7 +478,7 @@ cyclus::Material::Ptr MIsoEnrich::Enrich_(
   }
 
   cyclus::Material::Ptr response = pop_mat->ExtractComp(
-      product_qty, product_comp, 1e-10);
+      product_qty, product_comp, 1e-15);
   tails_inv.Push(pop_mat);
 
   current_swu_capacity -= swu_required;
@@ -490,14 +489,14 @@ cyclus::Material::Ptr MIsoEnrich::Enrich_(
   LOG(cyclus::LEV_INFO5, "MIsoEn") << prototype()
                                    << " has performed an enrichment: ";
   LOG(cyclus::LEV_INFO5, "MIsoEn") << "   * Feed Qty: " << feed_required;
-  LOG(cyclus::LEV_INFO5, "MIsoEn") << "   * Feed Assay (atomic frac): "
+  LOG(cyclus::LEV_INFO5, "MIsoEn") << "   * Feed Assay (mass frac): "
                                    << MIsoAssay(feed_cm);
   LOG(cyclus::LEV_INFO5, "MIsoEn") << "   * Product Qty: " << product_qty;
-  LOG(cyclus::LEV_INFO5, "MIsoEn") << "   * Product Assay (atomic frac): "
-                                   << MIsoAtomAssay(response);
+  LOG(cyclus::LEV_INFO5, "MIsoEn") << "   * Product Assay (mass frac): "
+                                   << MIsoMassAssay(response);
   LOG(cyclus::LEV_INFO5, "MIsoEn") << "   * Tails Qty: " << pop_mat->quantity();
-  LOG(cyclus::LEV_INFO5, "MIsoEn") << "   * Tails Assay (atomic frac): "
-                                   << MIsoAtomAssay(pop_mat);
+  LOG(cyclus::LEV_INFO5, "MIsoEn") << "   * Tails Assay (mass frac): "
+                                   << MIsoMassAssay(pop_mat);
   LOG(cyclus::LEV_INFO5, "MIsoEn") << "   * SWU: " << swu_required;
   LOG(cyclus::LEV_INFO5, "MIsoEn") << "   * Current SWU capacity: "
                                    << current_swu_capacity;
@@ -515,9 +514,9 @@ cyclus::CompMap MIsoEnrich::FeedCompMap() {
   feed_inv.Push(mat);
   cyclus::CompMap avg_comp;
   for (const int& nuc : IsotopesNucID()) {
-    double atom_frac = MIsoAtomFrac(mat, nuc);
-    if (atom_frac > cyclus::eps_rsrc()) {
-      avg_comp[nuc] = atom_frac;
+    double mass_frac = MIsoMassFrac(mat, nuc);
+    if (mass_frac > cyclus::eps_rsrc()) {
+      avg_comp[nuc] = mass_frac;
     }
   }
   return avg_comp;
@@ -525,7 +524,7 @@ cyclus::CompMap MIsoEnrich::FeedCompMap() {
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 cyclus::Composition::Ptr MIsoEnrich::FeedComp() {
-  return cyclus::Composition::CreateFromAtom(FeedCompMap());
+  return cyclus::Composition::CreateFromMass(FeedCompMap());
 }
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
