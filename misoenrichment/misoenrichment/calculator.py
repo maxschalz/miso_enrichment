@@ -260,6 +260,7 @@ class Multi_isotope:
         taking into account the cascade key weight and all of the isotopes. The
         calculations follow [1].
         """
+        self.uptodate = False
         if self.process == "centrifuge":
             # The factor 1/3 has the unit of 1/atomic mass in order to keep alpha
             # dimensionless.
